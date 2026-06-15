@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Dead Archive</title>
+<style>
+  :root{--void:#0D0618;--deep:#1A0A2E;--purple:#2D1155;--amber:#F5A623;--teal:#00D4AA;--rose:#E8395A;--cream:#F5EDD6;--muted:#8B7BA8}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{background:var(--void);color:var(--cream);font-family:system-ui,sans-serif;min-height:100vh;overflow-x:hidden;padding-bottom:220px}
+  .header{background:linear-gradient(180deg,#0D0618 0%,#1A0A2E 100%);padding:16px 16px 0;position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(245,166,35,0.2)}
+  .logo-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .logo-text{font-family:Georgia,serif;font-size:26px;font-weight:900;background:linear-gradient(135deg,var(--amber),var(--rose));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .logo-sub{font-family:monospace;font-size:9px;color:var(--teal);letter-spacing:3px;text-transform:uppercase;margin-top:2px}
+  .search-row{display:flex;gap:8px;padding-bottom:12px}
+  .search-input{flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(245,166,35,0.3);border-radius:10px;color:var(--cream);font-family:monospace;font-size:13px;padding:10px 12px;outline:none;transition:border-color 0.2s}
+  .search-input:focus{border-color:var(--amber)}
+  .search-input::placeholder{color:var(--muted)}
+  .search-btn{background:linear-gradient(135deg,var(--amber),var(--rose));border:none;border-radius:10px;color:var(--void);cursor:pointer;font-family:monospace;font-size:11px;font-weight:700;padding:10px 14px;white-space:nowrap}
+  .search-btn:hover{opacity:0.85}
+  .breadcrumb{display:flex;align-items:center;gap:8px;padding:10px 16px;font-family:monospace;font-size:11px;color:var(--muted);border-bottom:1px solid rgba(255,255,255,0.05)}
+  .breadcrumb-link{color:var(--teal);cursor:pointer;text-decoration:underline}
+  .breadcrumb-sep{color:var(--purple)}
+  .section-label{font-family:monospace;font-size:10px;letter-spacing:3px;color:var(--teal);text-transform:uppercase;padding:16px 16px 8px}
+  .year-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:12px 16px}
+  .year-btn{background:rgba(45,17,85,0.5);border:1px solid rgba(245,166,35,0.15);border-radius:10px;color:var(--cream);cursor:pointer;font-family:Georgia,serif;font-size:18px;font-weight:900;padding:14px 0;text-align:center;transition:background 0.15s,border-color 0.15s;position:relative}
+  .year-btn:hover{background:rgba(45,17,85,0.9);border-color:var(--amber);color:var(--amber)}
+  .year-dot{position:absolute;top:6px;right:6px;width:5px;height:5px;border-radius:50%;background:var(--teal)}
+  .show-card{margin:0 12px 8px;background:rgba(45,17,85,0.5);border:1px solid rgba(245,166,35,0.15);border-radius:12px;padding:12px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;transition:background 0.15s,border-color 0.15s}
+  .show-card:hover,.show-card.active{background:rgba(45,17,85,0.9);border-color:var(--amber)}
+  .show-date-block{text-align:center;min-width:44px;flex-shrink:0}
+  .show-day{font-family:Georgia,serif;font-size:22px;font-weight:900;color:var(--amber);line-height:1}
+  .show-monthyear{font-family:monospace;font-size:9px;color:var(--muted)}
+  .show-info{flex:1;min-width:0}
+  .show-venue{font-size:13px;font-weight:600;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .show-meta{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
+  .show-loc{font-family:monospace;font-size:10px;color:var(--muted)}
+  .show-arrow{color:var(--muted);font-size:18px;flex-shrink:0}
+  .release-badge{display:inline-flex;align-items:center;border-radius:5px;padding:2px 6px;font-family:monospace;font-size:9px;white-space:nowrap;flex-shrink:0}
+  .heady-badge{display:inline-flex;align-items:center;gap:3px;border-radius:5px;padding:2px 6px;font-family:monospace;font-size:9px;white-space:nowrap;color:var(--amber);background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.35)}
+  .release-banner{margin:0 12px 8px;padding:10px 12px;background:rgba(45,17,85,0.6);border:1px solid rgba(245,166,35,0.2);border-radius:10px}
+  .release-banner-label{font-family:monospace;font-size:9px;color:var(--teal);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px}
+  .release-banner-item{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .release-banner-item:last-child{margin-bottom:0}
+  .release-art{width:44px;height:44px;border-radius:5px;object-fit:cover;flex-shrink:0}
+  .release-title{font-size:13px;font-weight:600;color:var(--cream)}
+  .release-type{font-family:monospace;font-size:10px;margin-top:2px}
+  .setlist-wrap{margin:0 16px}
+  .track-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer}
+  .track-row:hover{opacity:0.8}
+  .track-num{font-family:monospace;font-size:11px;color:var(--muted);width:20px;text-align:right;flex-shrink:0}
+  .track-info{flex:1;min-width:0}
+  .track-name{font-size:13px;color:var(--cream)}
+  .track-name.playing{color:var(--teal)}
+  .track-dur{font-family:monospace;font-size:10px;color:var(--muted);flex-shrink:0}
+  .track-icon{width:26px;height:26px;border-radius:50%;background:rgba(0,212,170,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;color:var(--teal)}
+  .msg{text-align:center;font-family:monospace;font-size:12px;padding:24px 16px;letter-spacing:1px}
+  .error-box{margin:8px 16px;padding:12px 14px;background:rgba(232,57,90,0.1);border:1px solid rgba(232,57,90,0.2);border-radius:8px;font-family:monospace;font-size:11px;color:var(--rose);line-height:1.6}
+  .player{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(0deg,#0D0618 0%,rgba(26,10,46,0.98) 100%);border-top:1px solid rgba(245,166,35,0.3);padding:10px 16px 28px}
+  .viz-wrap{height:44px;display:flex;align-items:flex-end;gap:2px;justify-content:center;margin-bottom:8px;overflow:hidden}
+  .viz-bar{width:3px;border-radius:2px 2px 0 0;background:linear-gradient(0deg,var(--rose),var(--amber) 50%,var(--teal));min-height:3px;transition:height 0.08s ease}
+  .now-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .now-text{flex:1;min-width:0}
+  .now-track{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--cream)}
+  .now-meta{display:flex;align-items:center;gap:6px;margin-top:2px;flex-wrap:wrap}
+  .now-show{font-family:monospace;font-size:10px;color:var(--muted)}
+  .progress-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .time-label{font-family:monospace;font-size:10px;color:var(--muted);min-width:32px}
+  .progress-track{flex:1;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;cursor:pointer}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--amber));border-radius:2px;width:0%}
+  .controls{display:flex;align-items:center;justify-content:center;gap:24px}
+  .ctrl-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:4px}
+  .ctrl-btn:hover{color:var(--cream)}
+  .play-btn{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--rose));border:none;color:var(--void);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 18px rgba(245,166,35,0.4);flex-shrink:0}
+  .play-btn:active{transform:scale(0.95)}
+  audio{display:none}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo-row">
+    <svg width="38" height="38" viewBox="0 0 40 40">
+      <circle cx="20" cy="17" r="13" fill="#2D1155" stroke="#F5A623" stroke-width="1.5"/>
+      <ellipse cx="15.5" cy="16" rx="3.5" ry="4" fill="#F5A623" opacity="0.9"/>
+      <ellipse cx="24.5" cy="16" rx="3.5" ry="4" fill="#F5A623" opacity="0.9"/>
+      <ellipse cx="15.5" cy="16" rx="1.8" ry="2.2" fill="#0D0618"/>
+      <ellipse cx="24.5" cy="16" rx="1.8" ry="2.2" fill="#0D0618"/>
+      <path d="M16 25 L24 25 L22 28 L18 28 Z" fill="#2D1155" stroke="#F5A623" stroke-width="1"/>
+      <line x1="20" y1="25" x2="20" y2="28" stroke="#F5A623" stroke-width="1"/>
+      <line x1="22" y1="25" x2="22" y2="28" stroke="#F5A623" stroke-width="1"/>
+      <line x1="18" y1="25" x2="18" y2="28" stroke="#F5A623" stroke-width="1"/>
+      <path d="M22 4 L17 14 L21 14 L16 24 L26 11 L21 11 Z" fill="#E8395A" opacity="0.9"/>
+    </svg>
+    <div>
+      <div class="logo-text">Dead Archive</div>
+      <div class="logo-sub">via archive.org</div>
+    </div>
+  </div>
+  <div class="search-row">
+    <input class="search-input" id="searchInput" type="text" placeholder="Search venue, city, or song…">
+    <button class="search-btn" id="searchBtn">SEARCH</button>
+  </div>
+</div>
+
+<div id="breadcrumb" class="breadcrumb" style="display:none"></div>
+<div id="main"></div>
+
+<div class="player" id="player" style="display:none">
+  <div class="viz-wrap" id="vizWrap"></div>
+  <div class="now-row">
+    <div class="now-text">
+      <div class="now-track" id="nowTrack">—</div>
+      <div class="now-meta"><span class="now-show" id="nowShow">—</span><span id="playerBadge"></span></div>
+    </div>
+  </div>
+  <div class="progress-row">
+    <span class="time-label" id="timeElapsed">0:00</span>
+    <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
+    <span class="time-label" style="text-align:right" id="timeDuration">0:00</span>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="prevBtn">⏮</button>
+    <button class="play-btn" id="playBtn">▶</button>
+    <button class="ctrl-btn" id="nextBtn">⏭</button>
+  </div>
+</div>
+<audio id="audio" crossorigin="anonymous"></audio>
+
+<script>
+// Populated from dead_data.json on load
+const OFFICIAL_RELEASES = {};
+const HEADY_BY_DATE = {};  // "YYYY-MM-DD" -> [{song, rank}]
+const RELEASE_YEARS = new Set();
+
+const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const DEAD_YEARS = [];
+for (let y = 1965; y <= 1995; y++) DEAD_YEARS.push(y);
+
+function isoDate(raw) { const m = (raw||"").match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; }
+function getReleases(date) { return date ? (OFFICIAL_RELEASES[date] || []) : []; }
+function getHeady(date) { return date ? (HEADY_BY_DATE[date] || []) : []; }
+function fmtTime(s) { if (!s||isNaN(s)) return "0:00"; return Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0"); }
+function cleanName(n) {
+  return n.replace(/\.(mp3|ogg|flac|shn)$/i,"")
+    .replace(/^gd\d{2}-\d{2}-\d{2}[a-z]?\d*[.\-]*/i,"")
+    .replace(/^d\d+t\d+[.\-]*/i,"")
+    .replace(/[-_]/g," ").replace(/\s+/g," ").trim()
+    .replace(/\b\w/g,c=>c.toUpperCase())||n;
+}
+function trackOrder(f) {
+  if (f.track) { const m = String(f.track).match(/(\d+)/); if (m) { const d = f.name.match(/[Dd](\d+)[Tt]\d+/); return (d?parseInt(d[1])*1000:0)+parseInt(m[1]); } }
+  const dn = f.name.toLowerCase();
+  const dt = dn.match(/d(\d+)t(\d+)/); if (dt) return parseInt(dt[1])*1000+parseInt(dt[2]);
+  const t = dn.match(/(?:^|[^\d])(\d{2,3})(?:[^\d]|$)/); if (t) return parseInt(t[1]);
+  return 9999;
+}
+function displayName(f) {
+  const title = (f.title||"").trim();
+  if (title && !/^(d\d+t\d+|track\s*\d+|t\d+)$/i.test(title) && title.length > 2) return title;
+  return cleanName(f.name);
+}
+
+// DOM
+const main=document.getElementById("main"),breadcrumb=document.getElementById("breadcrumb"),
+  player=document.getElementById("player"),playBtn=document.getElementById("playBtn"),
+  prevBtn=document.getElementById("prevBtn"),nextBtn=document.getElementById("nextBtn"),
+  progressFill=document.getElementById("progressFill"),progressTrack=document.getElementById("progressTrack"),
+  timeElapsed=document.getElementById("timeElapsed"),timeDuration=document.getElementById("timeDuration"),
+  nowTrack=document.getElementById("nowTrack"),nowShow=document.getElementById("nowShow"),
+  playerBadge=document.getElementById("playerBadge"),audio=document.getElementById("audio"),
+  vizWrap=document.getElementById("vizWrap");
+
+// Visualizer
+const vizBars=Array.from({length:60},()=>{const b=document.createElement("div");b.className="viz-bar";b.style.height="3px";b.style.opacity="0.25";vizWrap.appendChild(b);return b});
+let vizPlaying=false;
+setInterval(()=>vizBars.forEach(b=>{b.style.height=(vizPlaying?3+Math.random()*40:2+Math.random()*5)+"px";b.style.opacity=vizPlaying?"0.9":"0.25"}),80);
+
+// State
+let shows=[],activeShow=null,tracks=[],currentIdx=-1;
+
+// Helpers
+function makeBadge(r){const s=document.createElement("span");s.className="release-badge";s.style.cssText="background:"+r.color+"22;border:1px solid "+r.color+"55;color:"+r.color;s.textContent=r.title;return s}
+
+function makeBanner(releases){
+  if(!releases.length)return null;
+  const d=document.createElement("div");d.className="release-banner";
+  const lbl=document.createElement("div");lbl.className="release-banner-label";lbl.textContent="Official Release"+(releases.length>1?"s":"");d.appendChild(lbl);
+  releases.forEach(r=>{
+    const item=document.createElement("div");item.className="release-banner-item";
+    if(r.artwork){const img=document.createElement("img");img.src=r.artwork;img.className="release-art";img.style.border="1px solid "+r.color+"44";item.appendChild(img)}
+    const info=document.createElement("div");info.innerHTML="<div class=\"release-title\">"+r.title+"</div><div class=\"release-type\" style=\"color:"+r.color+"\">"+r.label+"</div>";
+    item.appendChild(info);d.appendChild(item);
+  });
+  return d;
+}
+
+function setBreadcrumb(parts){
+  if(!parts.length){breadcrumb.style.display="none";return}
+  breadcrumb.style.display="flex";breadcrumb.innerHTML="";
+  parts.forEach((p,i)=>{
+    if(i>0){const sep=document.createElement("span");sep.className="breadcrumb-sep";sep.textContent="›";breadcrumb.appendChild(sep)}
+    if(p.onclick){const a=document.createElement("span");a.className="breadcrumb-link";a.textContent=p.label;a.addEventListener("click",p.onclick);breadcrumb.appendChild(a)}
+    else{const span=document.createElement("span");span.textContent=p.label;breadcrumb.appendChild(span)}
+  });
+}
+
+// Views
+function showYearGrid(){
+  activeShow=null;shows=[];tracks=[];
+  setBreadcrumb([]);
+  document.getElementById("setlistSection")?.remove();
+  const frag=document.createDocumentFragment();
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="— BROWSE BY YEAR —";frag.appendChild(lbl);
+  const grid=document.createElement("div");grid.className="year-grid";
+  DEAD_YEARS.forEach(y=>{
+    const btn=document.createElement("button");btn.className="year-btn";btn.textContent=y;
+    if(RELEASE_YEARS.has(String(y))){const dot=document.createElement("span");dot.className="year-dot";btn.appendChild(dot)}
+    btn.addEventListener("click",()=>loadYear(y));
+    grid.appendChild(btn);
+  });
+  frag.appendChild(grid);
+  main.innerHTML="";main.appendChild(frag);
+}
+
+async function loadYear(year){
+  activeShow=null;shows=[];
+  document.getElementById("setlistSection")?.remove();
+  setBreadcrumb([{label:"All Years",onclick:showYearGrid},{label:String(year)}]);
+  main.innerHTML="<div class=\"msg\" style=\"color:var(--teal)\">🔮 LOADING "+year+"...</div>";
+  const url="https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+date%3A"+year+"&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=date+asc&rows=500&page=1&output=json";
+  try{
+    const r=await fetch(url);if(!r.ok)throw new Error();
+    const data=await r.json();
+    const byDate={};
+    (data.response?.docs||[]).forEach(doc=>{
+      const d=isoDate(doc.date);if(!d||!d.startsWith(String(year)))return;
+      if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc;
+    });
+    shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    if(!shows.length){main.innerHTML="<div class=\"error-box\">No recordings found for "+year+".</div>";return}
+    renderShowList(year);
+  }catch{main.innerHTML="<div class=\"error-box\">Couldn't reach archive.org — check your connection.</div>"}
+}
+
+function renderShowList(year){
+  const frag=document.createDocumentFragment();
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="— "+shows.length+" SHOWS IN "+year+" —";frag.appendChild(lbl);
+  shows.forEach((doc,i)=>{
+    const parts=(doc.date||"").split("-");
+    const day=parts[2]?parseInt(parts[2]):"?",month=parts[1]?MONTHS[parseInt(parts[1])-1]:"";
+    const venue=doc.venue||doc.title||"Unknown Venue";
+    const stars=doc.avg_rating?"★".repeat(Math.min(5,Math.round(parseFloat(doc.avg_rating)))):"";
+    const releases=getReleases(isoDate(doc.date));
+    const card=document.createElement("div");card.className="show-card";card.dataset.idx=i;
+    const dateBlock=document.createElement("div");dateBlock.className="show-date-block";
+    dateBlock.innerHTML="<div class=\"show-day\">"+day+"</div><div class=\"show-monthyear\">"+month+"</div>";
+    const info=document.createElement("div");info.className="show-info";
+    const venueEl=document.createElement("div");venueEl.className="show-venue";venueEl.textContent=venue;
+    const meta=document.createElement("div");meta.className="show-meta";
+    const loc=document.createElement("span");loc.className="show-loc";loc.textContent=doc.coverage||"";meta.appendChild(loc);
+    if(stars){const st=document.createElement("span");st.style.cssText="color:var(--amber);font-size:10px";st.textContent=stars;meta.appendChild(st)}
+    releases.forEach(r=>meta.appendChild(makeBadge(r)));
+    info.appendChild(venueEl);info.appendChild(meta);
+    const arrow=document.createElement("span");arrow.className="show-arrow";arrow.textContent="›";
+    card.appendChild(dateBlock);card.appendChild(info);card.appendChild(arrow);
+    card.addEventListener("click",()=>loadShow(i));
+    frag.appendChild(card);
+  });
+  main.innerHTML="";main.appendChild(frag);
+}
+
+async function doSearch(){
+  const q=document.getElementById("searchInput").value.trim();
+  if(!q){showYearGrid();return}
+  if(/^\d{4}$/.test(q)&&parseInt(q)>=1965&&parseInt(q)<=1995){await loadYear(parseInt(q));return}
+  activeShow=null;shows=[];
+  document.getElementById("setlistSection")?.remove();
+  setBreadcrumb([{label:"All Years",onclick:showYearGrid},{label:"\""+q+"\""}]);
+  main.innerHTML="<div class=\"msg\" style=\"color:var(--teal)\">🔮 SEARCHING...</div>";
+  const url="https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+"+encodeURIComponent(q)+"&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=avg_rating+desc&rows=50&page=1&output=json";
+  try{
+    const r=await fetch(url);if(!r.ok)throw new Error();
+    const data=await r.json();
+    const byDate={};
+    (data.response?.docs||[]).forEach(doc=>{const d=isoDate(doc.date);if(!d)return;if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc});
+    shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    if(!shows.length){main.innerHTML="<div class=\"error-box\">No shows found for \""+q+"\". Try a venue name, city, or year.</div>";return}
+    renderSearchResults(q);
+  }catch{main.innerHTML="<div class=\"error-box\">Couldn't reach archive.org — check your connection.</div>"}
+}
+
+function renderSearchResults(q){
+  const frag=document.createDocumentFragment();
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="— "+shows.length+" RESULTS FOR \""+q.toUpperCase()+"\" —";frag.appendChild(lbl);
+  shows.forEach((doc,i)=>{
+    const parts=(doc.date||"").split("-");
+    const day=parts[2]?parseInt(parts[2]):"?",month=parts[1]?MONTHS[parseInt(parts[1])-1]:"",year=parts[0]||"";
+    const venue=doc.venue||doc.title||"Unknown Venue";
+    const stars=doc.avg_rating?"★".repeat(Math.min(5,Math.round(parseFloat(doc.avg_rating)))):"";
+    const releases=getReleases(isoDate(doc.date));
+    const card=document.createElement("div");card.className="show-card";card.dataset.idx=i;
+    const dateBlock=document.createElement("div");dateBlock.className="show-date-block";
+    dateBlock.innerHTML="<div class=\"show-day\">"+day+"</div><div class=\"show-monthyear\">"+month+"<br>"+year+"</div>";
+    const info=document.createElement("div");info.className="show-info";
+    const venueEl=document.createElement("div");venueEl.className="show-venue";venueEl.textContent=venue;
+    const meta=document.createElement("div");meta.className="show-meta";
+    const loc=document.createElement("span");loc.className="show-loc";loc.textContent=doc.coverage||"";meta.appendChild(loc);
+    if(stars){const st=document.createElement("span");st.style.cssText="color:var(--amber);font-size:10px";st.textContent=stars;meta.appendChild(st)}
+    releases.forEach(r=>meta.appendChild(makeBadge(r)));
+    info.appendChild(venueEl);info.appendChild(meta);
+    const arrow=document.createElement("span");arrow.className="show-arrow";arrow.textContent="›";
+    card.appendChild(dateBlock);card.appendChild(info);card.appendChild(arrow);
+    card.addEventListener("click",()=>loadShow(i));
+    frag.appendChild(card);
+  });
+  main.innerHTML="";main.appendChild(frag);
+}
+
+async function loadShow(idx){
+  const doc=shows[idx];if(!doc)return;
+  activeShow=doc;
+  main.querySelectorAll(".show-card").forEach((c,i)=>c.classList.toggle("active",i===idx));
+  document.getElementById("setlistSection")?.remove();
+  const loading=document.createElement("div");loading.id="setlistLoading";loading.className="msg";loading.style.color="var(--teal)";loading.textContent="🎸 LOADING SETLIST...";main.appendChild(loading);
+  try{
+    const r=await fetch("https://archive.org/metadata/"+doc.identifier);if(!r.ok)throw new Error();
+    const meta=await r.json();
+    let mp3s=(meta.files||[]).filter(f=>{const n=f.name.toLowerCase();return n.endsWith(".mp3")&&!n.includes("_vbr")&&!n.includes("_sample")});
+    if(!mp3s.length)mp3s=(meta.files||[]).filter(f=>f.name.toLowerCase().endsWith(".ogg")&&!f.name.toLowerCase().includes("_vbr"));
+    mp3s.sort((a,b)=>trackOrder(a)-trackOrder(b));
+    loading.remove();
+    if(!mp3s.length){const e=document.createElement("div");e.className="error-box";e.textContent="No streamable audio found. Try another recording.";main.appendChild(e);return}
+    tracks=mp3s.map(f=>({name:displayName(f),url:"https://archive.org/download/"+doc.identifier+"/"+encodeURIComponent(f.name),duration:f.length||""}));
+    renderSetlist(doc);
+  }catch{document.getElementById("setlistLoading")?.remove();const e=document.createElement("div");e.className="error-box";e.textContent="Couldn't load show details.";main.appendChild(e)}
+}
+
+function renderSetlist(doc){
+  const section=document.createElement("div");section.id="setlistSection";
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="— SETLIST: "+(doc.venue||doc.title||"").toUpperCase()+" —";section.appendChild(lbl);
+  const releases=getReleases(isoDate(doc.date));
+  const banner=makeBanner(releases);if(banner)section.appendChild(banner);
+  const wrap=document.createElement("div");wrap.className="setlist-wrap";
+
+  const showDate=isoDate(doc.date);
+  const headyPicks=getHeady(showDate);
+
+  tracks.forEach((t,i)=>{
+    const row=document.createElement("div");row.className="track-row";
+
+    // Match track name against heady picks for this date
+    const tLower=t.name.toLowerCase();
+    const heady=headyPicks.find(h=>{
+      const sLower=h.song.toLowerCase();
+      return tLower.includes(sLower)||sLower.includes(tLower)||
+        (sLower.split(" ")[0].length>3&&tLower.includes(sLower.split(" ")[0]));
+    });
+
+    const numEl=document.createElement("span");numEl.className="track-num";numEl.textContent=i+1;
+    const infoEl=document.createElement("div");infoEl.className="track-info";
+    const nameEl=document.createElement("span");nameEl.className="track-name";nameEl.id="tn-"+i;nameEl.textContent=t.name;
+    infoEl.appendChild(nameEl);
+    if(heady){
+      const badge=document.createElement("span");badge.className="heady-badge";badge.style.marginTop="3px;display:block";
+      badge.textContent="🔥 #"+heady.rank+" "+heady.song;
+      infoEl.appendChild(badge);
+    }
+    const durEl=t.duration?(() =>{const s=document.createElement("span");s.className="track-dur";s.textContent=fmtTime(parseFloat(t.duration));return s})():null;
+    const iconEl=document.createElement("div");iconEl.className="track-icon";iconEl.textContent="▶";
+    row.appendChild(numEl);row.appendChild(infoEl);if(durEl)row.appendChild(durEl);row.appendChild(iconEl);
+    row.addEventListener("click",()=>playTrack(i));
+    wrap.appendChild(row);
+  });
+  section.appendChild(wrap);main.appendChild(section);
+  section.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function playTrack(idx){
+  if(idx<0||idx>=tracks.length)return;
+  currentIdx=idx;
+  document.querySelectorAll(".track-name").forEach((el,i)=>el.classList.toggle("playing",i===idx));
+  audio.src=tracks[idx].url;audio.load();
+  audio.play().then(()=>{vizPlaying=true;playBtn.textContent="⏸"}).catch(()=>{});
+  nowTrack.textContent=tracks[idx].name;
+  nowShow.textContent=activeShow?.venue||activeShow?.title||"";
+  playerBadge.innerHTML="";
+  const rel=getReleases(isoDate(activeShow?.date));
+  if(rel[0])playerBadge.appendChild(makeBadge(rel[0]));
+  player.style.display="block";
+}
+
+function togglePlay(){
+  if(!audio.src)return;
+  if(audio.paused){audio.play();vizPlaying=true;playBtn.textContent="⏸"}
+  else{audio.pause();vizPlaying=false;playBtn.textContent="▶"}
+}
+
+audio.addEventListener("timeupdate",()=>{if(audio.duration){progressFill.style.width=(audio.currentTime/audio.duration*100)+"%";timeElapsed.textContent=fmtTime(audio.currentTime);timeDuration.textContent=fmtTime(audio.duration)}});
+audio.addEventListener("ended",()=>{if(currentIdx<tracks.length-1)playTrack(currentIdx+1);else{vizPlaying=false;playBtn.textContent="▶"}});
+audio.addEventListener("error",()=>{if(currentIdx<tracks.length-1)setTimeout(()=>playTrack(currentIdx+1),500)});
+progressTrack.addEventListener("click",e=>{if(!audio.duration)return;const rect=progressTrack.getBoundingClientRect();audio.currentTime=((e.clientX-rect.left)/rect.width)*audio.duration});
+playBtn.addEventListener("click",togglePlay);
+prevBtn.addEventListener("click",()=>{if(currentIdx>0)playTrack(currentIdx-1)});
+nextBtn.addEventListener("click",()=>{if(currentIdx<tracks.length-1)playTrack(currentIdx+1)});
+document.getElementById("searchBtn").addEventListener("click",doSearch);
+document.getElementById("searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch()});
+
+// Boot — load dead_data.json then render
+async function loadData(){
+  try{
+    const r=await fetch("./dead_data.json");
+    const data=await r.json();
+    // Official releases
+    Object.assign(OFFICIAL_RELEASES,data.official_releases||{});
+    // Release years for dots on year grid
+    Object.keys(OFFICIAL_RELEASES).forEach(d=>RELEASE_YEARS.add(d.slice(0,4)));
+    // Heady picks by date (rank = position in versions list)
+    const songs=data.heady_songs||{};
+    for(const[songName,songData]of Object.entries(songs)){
+      (songData.versions||[]).slice(0,5).forEach((v,idx)=>{
+        const date=v.date;
+        if(!date||date.length!==10)return;
+        if(!HEADY_BY_DATE[date])HEADY_BY_DATE[date]=[];
+        HEADY_BY_DATE[date].push({song:songName,rank:idx+1});
+      });
+    }
+  }catch(e){console.warn("Could not load dead_data.json:",e)}
+  showYearGrid();
+}
+loadData();
+</script>
+</body>
+</html>
