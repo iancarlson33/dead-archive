@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Dead Archive</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=IBM+Plex+Mono:wght@400;500;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --espresso:  #110C07;
+  --dark:      #1A1208;
+  --mid:       #2A1F12;
+  --amber:     #C4820A;
+  --amber-dim: #7A5208;
+  --red:       #7A1F1F;
+  --teal:      #1D5C5C;
+  --parchment: #E8D9B8;
+  --ghost:     #F5EFE3;
+  --muted:     #8A7A62;
+  --rule:      rgba(196,130,10,0.25);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  background: var(--espresso);
+  color: var(--parchment);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  padding-bottom: 200px;
+}
+
+/* ── HEADER ── */
+.site-header {
+  background: var(--dark);
+  border-bottom: 2px solid var(--amber);
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+
+.header-top {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 0 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.site-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--ghost);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.site-sub {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: var(--amber);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-left: auto;
+}
+
+.search-row {
+  display: flex;
+  gap: 0;
+  padding: 10px 0;
+}
+
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-right: none;
+  color: var(--parchment);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  padding: 9px 12px;
+  outline: none;
+}
+
+.search-input:focus { border-color: var(--amber); }
+.search-input::placeholder { color: var(--muted); }
+
+.search-btn {
+  background: var(--amber);
+  border: 1px solid var(--amber);
+  color: var(--espresso);
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 9px 14px;
+  text-transform: uppercase;
+}
+
+.search-btn:hover { background: var(--ghost); border-color: var(--ghost); }
+
+/* ── BREADCRUMB ── */
+.breadcrumb {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--rule);
+  background: var(--dark);
+}
+
+.breadcrumb.visible { display: flex; }
+.bc-link { color: var(--amber); cursor: pointer; }
+.bc-link:hover { color: var(--ghost); }
+.bc-sep { color: var(--amber-dim); }
+
+/* ── SECTION LABEL ── */
+.section-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: var(--amber);
+  text-transform: uppercase;
+  padding: 20px 16px 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ── YEAR GRID ── */
+.year-almanac {
+  padding: 0 16px;
+}
+
+.year-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.year-row:hover { background: var(--mid); }
+
+.year-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--parchment);
+  width: 90px;
+  flex-shrink: 0;
+  padding: 14px 0;
+  line-height: 1;
+}
+
+.year-num.has-release { color: var(--amber); }
+
+.year-bar-wrap {
+  flex: 1;
+  padding: 0 16px;
+  position: relative;
+}
+
+.year-bar {
+  height: 3px;
+  background: var(--amber-dim);
+  opacity: 0.4;
+}
+
+.year-bar.filled { opacity: 1; background: var(--amber); }
+
+.year-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: var(--muted);
+  text-align: right;
+  width: 80px;
+  flex-shrink: 0;
+  padding: 14px 0;
+}
+
+.year-release-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--amber);
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ── SHOW LIST ── */
+.show-list { padding: 0 16px; }
+
+.show-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+  transition: background 0.1s;
+  padding: 12px 0;
+}
+
+.show-row:hover, .show-row.active { background: var(--mid); margin: 0 -16px; padding: 12px 16px; }
+
+.show-date-col {
+  flex-shrink: 0;
+  width: 70px;
+  padding-right: 16px;
+  border-right: 1px solid var(--rule);
+  margin-right: 16px;
+}
+
+.show-day-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 44px;
+  font-weight: 900;
+  color: var(--ghost);
+  line-height: 1;
+}
+
+.show-month-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--amber);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.show-info-col { flex: 1; min-width: 0; }
+
+.show-venue-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ghost);
+  line-height: 1.2;
+}
+
+.show-location {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.show-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 5px;
+  border: 1px solid currentColor;
+}
+
+.tag-release { color: var(--amber); border-color: var(--amber-dim); background: rgba(196,130,10,0.08); }
+.tag-stars   { color: var(--muted); border-color: rgba(138,122,98,0.3); }
+
+.show-arrow {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--amber-dim);
+  font-size: 16px;
+  padding-left: 8px;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ── SHOW PROGRAM HEADER ── */
+.program-header {
+  background: var(--dark);
+  border-bottom: 2px solid var(--amber);
+  padding: 20px 16px;
+  margin-bottom: 0;
+}
+
+.program-eyebrow {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: var(--amber);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.program-date {
+  font-family: 'Playfair Display', serif;
+  font-size: 13px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.program-venue {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--ghost);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.program-location {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.program-rule {
+  height: 1px;
+  background: var(--rule);
+  margin-bottom: 14px;
+}
+
+.program-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.meta-cell { }
+
+.meta-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--amber-dim);
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.meta-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--parchment);
+  font-weight: 500;
+}
+
+.meta-value.amber { color: var(--amber); }
+
+.program-releases {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.release-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.release-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--amber-dim);
+}
+
+.release-info { }
+.release-name { font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 700; color: var(--ghost); }
+.release-type { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--amber); letter-spacing: 1px; text-transform: uppercase; margin-top: 1px; }
+
+.program-description {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  font-style: italic;
+}
+
+/* ── SETLIST ── */
+.setlist-section {
+  padding: 0 16px;
+}
+
+.set-header {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 4px;
+  color: var(--red);
+  text-transform: uppercase;
+  padding: 16px 0 8px;
+  border-bottom: 1px solid rgba(122,31,31,0.3);
+}
+
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.track-row:hover, .track-row.playing { background: var(--mid); margin: 0 -16px; padding: 10px 16px; }
+
+.track-num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  width: 18px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.track-body { flex: 1; min-width: 0; }
+
+.track-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  color: var(--parchment);
+}
+
+.track-row.playing .track-name { color: var(--amber); }
+
+.track-heady {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: var(--amber-dim);
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+
+.track-dur {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.track-play {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--amber-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: var(--amber);
+  flex-shrink: 0;
+}
+
+/* ── MESSAGES ── */
+.msg {
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--amber);
+  padding: 32px 16px;
+  letter-spacing: 2px;
+}
+
+.error-msg {
+  margin: 16px;
+  padding: 12px;
+  border: 1px solid var(--red);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: #C46060;
+  line-height: 1.6;
+}
+
+/* ── PLAYER ── */
+.player {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--dark);
+  border-top: 2px solid var(--amber);
+  padding: 10px 16px 24px;
+  z-index: 200;
+}
+
+.viz-row {
+  height: 36px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.viz-bar {
+  flex: 1;
+  background: var(--amber);
+  min-height: 2px;
+  opacity: 0.5;
+  transition: height 0.08s ease;
+}
+
+.player-now {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.player-text { flex: 1; min-width: 0; }
+
+.player-track {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ghost);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-show {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-badge {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  color: var(--amber);
+  border: 1px solid var(--amber-dim);
+  padding: 2px 5px;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.time-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  min-width: 32px;
+}
+
+.progress-track {
+  flex: 1;
+  height: 2px;
+  background: var(--amber-dim);
+  cursor: pointer;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--amber);
+  width: 0%;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+}
+
+.ctrl-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.ctrl-btn:hover { color: var(--parchment); }
+
+.play-btn {
+  width: 44px;
+  height: 44px;
+  background: var(--amber);
+  border: none;
+  color: var(--espresso);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.play-btn:hover { background: var(--ghost); }
+
+audio { display: none; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-top">
+    <div class="site-title">Dead Archive</div>
+    <div class="site-sub">Live Music · Archive.org</div>
+  </div>
+  <div class="search-row">
+    <input class="search-input" id="searchInput" type="text" placeholder="Search venue, city, year…">
+    <button class="search-btn" id="searchBtn">Search</button>
+  </div>
+</header>
+
+<div id="breadcrumb" class="breadcrumb">
+  <span id="bcHome" class="bc-link">All Years</span>
+</div>
+
+<div id="main"></div>
+
+<div class="player" id="player" style="display:none">
+  <div class="viz-row" id="vizRow"></div>
+  <div class="player-now">
+    <div class="player-text">
+      <div class="player-track" id="playerTrack">—</div>
+      <div class="player-show" id="playerShow">—</div>
+    </div>
+    <div class="player-badge" id="playerBadge" style="display:none"></div>
+  </div>
+  <div class="progress-row">
+    <span class="time-label" id="timeElapsed">0:00</span>
+    <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
+    <span class="time-label" style="text-align:right" id="timeDuration">0:00</span>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="prevBtn">⏮</button>
+    <button class="play-btn" id="playBtn">▶</button>
+    <button class="ctrl-btn" id="nextBtn">⏭</button>
+  </div>
+</div>
+
+<audio id="audio" crossorigin="anonymous"></audio>
+
+<script>
+// ── Data (loaded from dead_data.json) ──
+const RELEASES = {};
+const HEADY    = {};
+const REL_YEARS = new Set();
+
+const MONTHS_SHORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const MONTHS_LONG  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DEAD_YEARS   = Array.from({length:31},(_,i)=>1965+i);
+
+// Show density by year (rough estimates for bar widths)
+const YEAR_COUNTS = {
+  1965:20,1966:70,1967:90,1968:90,1969:100,1970:150,1971:140,1972:130,
+  1973:140,1974:80,1975:20,1976:60,1977:90,1978:100,1979:90,1980:90,
+  1981:80,1982:80,1983:90,1984:100,1985:100,1986:60,1987:90,1988:90,
+  1989:100,1990:100,1991:100,1992:100,1993:80,1994:80,1995:50
+};
+const MAX_COUNT = Math.max(...Object.values(YEAR_COUNTS));
+
+function isoDate(raw) { const m=(raw||"").match(/^(\d{4}-\d{2}-\d{2})/); return m?m[1]:null; }
+function getReleases(d) { return d?(RELEASES[d]||[]):[]; }
+function getHeady(d)    { return d?(HEADY[d]||[]):[]; }
+function fmtTime(s)     { if(!s||isNaN(s))return"0:00"; return Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0"); }
+
+function cleanName(n) {
+  return n.replace(/\.(mp3|ogg|flac|shn)$/i,"")
+    .replace(/^gd\d{2}-\d{2}-\d{2}[a-z]?\d*[.\-]*/i,"")
+    .replace(/^d\d+t\d+[.\-]*/i,"")
+    .replace(/[-_]/g," ").replace(/\s+/g," ").trim()
+    .replace(/\b\w/g,c=>c.toUpperCase())||n;
+}
+
+function trackOrder(f) {
+  if(f.track){const m=String(f.track).match(/(\d+)/);if(m){const d=f.name.match(/[Dd](\d+)[Tt]\d+/);return(d?parseInt(d[1])*1000:0)+parseInt(m[1]);}}
+  const dn=f.name.toLowerCase();
+  const dt=dn.match(/d(\d+)t(\d+)/);if(dt)return parseInt(dt[1])*1000+parseInt(dt[2]);
+  const t=dn.match(/(?:^|[^\d])(\d{2,3})(?:[^\d]|$)/);if(t)return parseInt(t[1]);
+  return 9999;
+}
+
+function displayName(f) {
+  const title=(f.title||"").trim();
+  if(title&&!/^(d\d+t\d+|track\s*\d+|t\d+)$/i.test(title)&&title.length>2)return title;
+  return cleanName(f.name);
+}
+
+function parseSource(identifier) {
+  const id=(identifier||"").toLowerCase();
+  if(id.includes(".sbd."))return"Soundboard";
+  if(id.includes(".mtx."))return"Matrix";
+  if(id.includes(".aud."))return"Audience";
+  if(id.includes("sbd"))return"Soundboard";
+  if(id.includes("mtx"))return"Matrix";
+  if(id.includes("aud"))return"Audience";
+  return"Recording";
+}
+
+// DOM
+const mainEl       = document.getElementById("main");
+const breadcrumb   = document.getElementById("breadcrumb");
+const bcHome       = document.getElementById("bcHome");
+const playerEl     = document.getElementById("player");
+const playBtn      = document.getElementById("playBtn");
+const prevBtn      = document.getElementById("prevBtn");
+const nextBtn      = document.getElementById("nextBtn");
+const progressFill = document.getElementById("progressFill");
+const progressTrack= document.getElementById("progressTrack");
+const timeElapsed  = document.getElementById("timeElapsed");
+const timeDuration = document.getElementById("timeDuration");
+const playerTrack  = document.getElementById("playerTrack");
+const playerShow   = document.getElementById("playerShow");
+const playerBadge  = document.getElementById("playerBadge");
+const audio        = document.getElementById("audio");
+const vizRow       = document.getElementById("vizRow");
+
+// Visualizer
+const VIZ_BARS = 40;
+const vizBars  = Array.from({length:VIZ_BARS},()=>{
+  const b=document.createElement("div"); b.className="viz-bar"; b.style.height="2px";
+  vizRow.appendChild(b); return b;
+});
+let vizPlaying = false;
+setInterval(()=>vizBars.forEach(b=>{
+  b.style.height=(vizPlaying?2+Math.random()*32:2)+"px";
+  b.style.opacity=vizPlaying?"0.7":"0.2";
+}),100);
+
+// State
+let shows=[], activeShow=null, tracks=[], currentIdx=-1, currentView="years";
+
+// ── Breadcrumb ──
+function setBreadcrumb(parts) {
+  if(!parts||!parts.length){breadcrumb.classList.remove("visible");return;}
+  breadcrumb.classList.add("visible");
+  breadcrumb.innerHTML="";
+  const home=document.createElement("span");home.className="bc-link";home.textContent="All Years";
+  home.addEventListener("click",showYearGrid);breadcrumb.appendChild(home);
+  parts.forEach(p=>{
+    const sep=document.createElement("span");sep.className="bc-sep";sep.textContent=" / ";breadcrumb.appendChild(sep);
+    const s=document.createElement("span");
+    if(p.onclick){s.className="bc-link";s.textContent=p.label;s.addEventListener("click",p.onclick);}
+    else{s.style.color="var(--parchment)";s.textContent=p.label;}
+    breadcrumb.appendChild(s);
+  });
+}
+
+// ── Year Grid ──
+function showYearGrid() {
+  currentView="years"; activeShow=null; shows=[]; tracks=[];
+  setBreadcrumb(null);
+  document.getElementById("programHeader")?.remove();
+  document.getElementById("setlistBlock")?.remove();
+
+  const frag=document.createDocumentFragment();
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="— Browse by Year —";frag.appendChild(lbl);
+
+  const almanac=document.createElement("div");almanac.className="year-almanac";
+  DEAD_YEARS.forEach(y=>{
+    const hasRelease=REL_YEARS.has(String(y));
+    const count=YEAR_COUNTS[y]||0;
+    const pct=Math.round((count/MAX_COUNT)*100);
+
+    const row=document.createElement("div");row.className="year-row";
+    row.innerHTML=
+      '<div class="year-num'+(hasRelease?' has-release':'')+'">'+(hasRelease?'<span class="year-release-dot"></span>':'')+y+'</div>'+
+      '<div class="year-bar-wrap"><div class="year-bar'+(pct>30?' filled':'')+'" style="width:'+pct+'%"></div></div>'+
+      '<div class="year-meta">'+(hasRelease?'★ released':'')+'</div>';
+    row.addEventListener("click",()=>loadYear(y));
+    almanac.appendChild(row);
+  });
+  frag.appendChild(almanac);
+  mainEl.innerHTML="";mainEl.appendChild(frag);
+}
+
+// ── Load Year ──
+async function loadYear(year) {
+  activeShow=null; shows=[];
+  document.getElementById("programHeader")?.remove();
+  document.getElementById("setlistBlock")?.remove();
+  setBreadcrumb([{label:String(year)}]);
+  mainEl.innerHTML='<div class="msg">Loading '+year+'…</div>';
+
+  const url="https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+date%3A"+year+
+    "&fl[]=identifier,title,date,venue,coverage,avg_rating,description&sort[]=date+asc&rows=500&page=1&output=json";
+  try{
+    const r=await fetch(url);if(!r.ok)throw new Error();
+    const data=await r.json();
+    const byDate={};
+    (data.response?.docs||[]).forEach(doc=>{
+      const d=isoDate(doc.date);if(!d||!d.startsWith(String(year)))return;
+      if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc;
+    });
+    shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    if(!shows.length){mainEl.innerHTML='<div class="error-msg">No recordings found for '+year+'.</div>';return;}
+    renderShowList(year);
+  }catch{mainEl.innerHTML='<div class="error-msg">Could not reach archive.org. Check your connection.</div>';}
+}
+
+// ── Render Show List ──
+function renderShowList(year) {
+  const frag=document.createDocumentFragment();
+  const lbl=document.createElement("div");lbl.className="section-label";
+  lbl.textContent="— "+shows.length+" Recordings · "+year+" —";frag.appendChild(lbl);
+
+  const list=document.createElement("div");list.className="show-list";
+  shows.forEach((doc,i)=>{
+    const parts=(doc.date||"").split("-");
+    const day=parts[2]?parseInt(parts[2]):"?";
+    const month=parts[1]?MONTHS_SHORT[parseInt(parts[1])-1]:"";
+    const venue=doc.venue||doc.title||"Unknown Venue";
+    const stars=doc.avg_rating?Math.round(parseFloat(doc.avg_rating)):0;
+    const releases=getReleases(isoDate(doc.date));
+
+    const row=document.createElement("div");row.className="show-row";row.dataset.idx=i;
+
+    const dateCol=document.createElement("div");dateCol.className="show-date-col";
+    dateCol.innerHTML='<div class="show-day-num">'+day+'</div><div class="show-month-label">'+month+'</div>';
+
+    const infoCol=document.createElement("div");infoCol.className="show-info-col";
+    const venueLine=document.createElement("div");venueLine.className="show-venue-name";venueLine.textContent=venue;
+    const locLine=document.createElement("div");locLine.className="show-location";locLine.textContent=doc.coverage||"";
+
+    const tags=document.createElement("div");tags.className="show-tags";
+    if(stars){const t=document.createElement("span");t.className="tag tag-stars";t.textContent="★".repeat(Math.min(5,stars));tags.appendChild(t);}
+    releases.forEach(r=>{const t=document.createElement("span");t.className="tag tag-release";t.textContent=r.title;tags.appendChild(t);});
+
+    infoCol.appendChild(venueLine);infoCol.appendChild(locLine);if(tags.children.length)infoCol.appendChild(tags);
+
+    const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="›";
+
+    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(arrow);
+    row.addEventListener("click",()=>loadShow(i));
+    list.appendChild(row);
+  });
+  frag.appendChild(list);
+  mainEl.innerHTML="";mainEl.appendChild(frag);
+}
+
+// ── Search ──
+async function doSearch() {
+  const q=document.getElementById("searchInput").value.trim();
+  if(!q){showYearGrid();return;}
+  if(/^\d{4}$/.test(q)&&parseInt(q)>=1965&&parseInt(q)<=1995){await loadYear(parseInt(q));return;}
+
+  activeShow=null;shows=[];
+  document.getElementById("programHeader")?.remove();
+  document.getElementById("setlistBlock")?.remove();
+  setBreadcrumb([{label:'"'+q+'"'}]);
+  mainEl.innerHTML='<div class="msg">Searching…</div>';
+
+  const url="https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+"+encodeURIComponent(q)+
+    "&fl[]=identifier,title,date,venue,coverage,avg_rating,description&sort[]=avg_rating+desc&rows=50&page=1&output=json";
+  try{
+    const r=await fetch(url);if(!r.ok)throw new Error();
+    const data=await r.json();
+    const byDate={};
+    (data.response?.docs||[]).forEach(doc=>{const d=isoDate(doc.date);if(!d)return;if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc;});
+    shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    if(!shows.length){mainEl.innerHTML='<div class="error-msg">No results for "'+q+'". Try a venue name, city, or year.</div>';return;}
+    renderSearchResults(q);
+  }catch{mainEl.innerHTML='<div class="error-msg">Could not reach archive.org.</div>';}
+}
+
+function renderSearchResults(q) {
+  const frag=document.createDocumentFragment();
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent='— '+shows.length+' Results for "'+q+'" —';frag.appendChild(lbl);
+  const list=document.createElement("div");list.className="show-list";
+  shows.forEach((doc,i)=>{
+    const parts=(doc.date||"").split("-");
+    const day=parts[2]?parseInt(parts[2]):"?";
+    const month=parts[1]?MONTHS_SHORT[parseInt(parts[1])-1]:"";
+    const year=parts[0]||"";
+    const venue=doc.venue||doc.title||"Unknown Venue";
+    const stars=doc.avg_rating?Math.round(parseFloat(doc.avg_rating)):0;
+    const releases=getReleases(isoDate(doc.date));
+
+    const row=document.createElement("div");row.className="show-row";
+    const dateCol=document.createElement("div");dateCol.className="show-date-col";
+    dateCol.innerHTML='<div class="show-day-num">'+day+'</div><div class="show-month-label">'+month+'<br><span style="color:var(--amber);font-size:11px">'+year+'</span></div>';
+    const infoCol=document.createElement("div");infoCol.className="show-info-col";
+    const venueLine=document.createElement("div");venueLine.className="show-venue-name";venueLine.textContent=venue;
+    const locLine=document.createElement("div");locLine.className="show-location";locLine.textContent=doc.coverage||"";
+    const tags=document.createElement("div");tags.className="show-tags";
+    if(stars){const t=document.createElement("span");t.className="tag tag-stars";t.textContent="★".repeat(Math.min(5,stars));tags.appendChild(t);}
+    releases.forEach(r=>{const t=document.createElement("span");t.className="tag tag-release";t.textContent=r.title;tags.appendChild(t);});
+    infoCol.appendChild(venueLine);infoCol.appendChild(locLine);if(tags.children.length)infoCol.appendChild(tags);
+    const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="›";
+    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(arrow);
+    row.addEventListener("click",()=>loadShow(i));
+    list.appendChild(row);
+  });
+  frag.appendChild(list);
+  mainEl.innerHTML="";mainEl.appendChild(frag);
+}
+
+// ── Load Show ──
+async function loadShow(idx) {
+  const doc=shows[idx];if(!doc)return;
+  activeShow=doc;
+  mainEl.querySelectorAll(".show-row").forEach((r,i)=>r.classList.toggle("active",i===idx));
+  document.getElementById("programHeader")?.remove();
+  document.getElementById("setlistBlock")?.remove();
+
+  // Build program header immediately with what we have
+  renderProgramHeader(doc, null);
+
+  const loading=document.createElement("div");loading.className="msg";loading.id="setlistLoading";loading.textContent="Loading setlist…";mainEl.appendChild(loading);
+
+  try{
+    const r=await fetch("https://archive.org/metadata/"+doc.identifier);if(!r.ok)throw new Error();
+    const meta=await r.json();
+
+    // Enrich program header with metadata
+    const runtime=calcRuntime(meta.files||[]);
+    renderProgramHeader(doc, {meta, runtime});
+
+    let mp3s=(meta.files||[]).filter(f=>{const n=f.name.toLowerCase();return n.endsWith(".mp3")&&!n.includes("_vbr")&&!n.includes("_sample");});
+    if(!mp3s.length)mp3s=(meta.files||[]).filter(f=>f.name.toLowerCase().endsWith(".ogg")&&!f.name.toLowerCase().includes("_vbr"));
+    mp3s.sort((a,b)=>trackOrder(a)-trackOrder(b));
+    document.getElementById("setlistLoading")?.remove();
+    if(!mp3s.length){const e=document.createElement("div");e.className="error-msg";mainEl.appendChild(e);e.textContent="No streamable audio found.";return;}
+    tracks=mp3s.map(f=>({name:displayName(f),url:"https://archive.org/download/"+doc.identifier+"/"+encodeURIComponent(f.name),duration:f.length||""}));
+    renderSetlist(doc);
+  }catch{
+    document.getElementById("setlistLoading")?.remove();
+    const e=document.createElement("div");e.className="error-msg";e.textContent="Could not load show details.";mainEl.appendChild(e);
+  }
+}
+
+function calcRuntime(files) {
+  let total=0;
+  files.filter(f=>f.name.toLowerCase().endsWith(".mp3")&&!f.name.toLowerCase().includes("_vbr")).forEach(f=>{
+    if(f.length){const parts=String(f.length).split(":");if(parts.length===2)total+=parseInt(parts[0])*60+parseFloat(parts[1]);else total+=parseFloat(f.length);}
+  });
+  if(!total)return null;
+  const h=Math.floor(total/3600),m=Math.floor((total%3600)/60);
+  return h>0?h+"h "+m+"m":m+"m";
+}
+
+function renderProgramHeader(doc, extra) {
+  document.getElementById("programHeader")?.remove();
+
+  const parts=(doc.date||"").split("-");
+  const day=parts[2]?parseInt(parts[2]):"?";
+  const monthIdx=parts[1]?parseInt(parts[1])-1:0;
+  const year=parts[0]||"";
+  const monthLong=MONTHS_LONG[monthIdx]||"";
+  const venue=doc.venue||doc.title||"Unknown Venue";
+  const location=doc.coverage||"";
+  const stars=doc.avg_rating?Math.round(parseFloat(doc.avg_rating)):0;
+  const releases=getReleases(isoDate(doc.date));
+  const source=extra?parseSource(doc.identifier):"";
+  const runtime=extra?.runtime||"";
+  const description=(doc.description||"").replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().slice(0,200);
+
+  const header=document.createElement("div");
+  header.id="programHeader";
+  header.className="program-header";
+
+  let html=
+    '<div class="program-eyebrow">Grateful Dead · Live Recording</div>'+
+    '<div class="program-date">'+monthLong+' '+day+', '+year+'</div>'+
+    '<div class="program-venue">'+venue+'</div>'+
+    '<div class="program-location">'+location+'</div>'+
+    '<div class="program-rule"></div>'+
+    '<div class="program-meta-grid">'+
+      '<div class="meta-cell"><div class="meta-label">Date</div><div class="meta-value">'+monthLong.slice(0,3)+' '+day+', '+year+'</div></div>'+
+      '<div class="meta-cell"><div class="meta-label">Source</div><div class="meta-value amber">'+( source||'—')+'</div></div>'+
+      '<div class="meta-cell"><div class="meta-label">Runtime</div><div class="meta-value">'+(runtime||'—')+'</div></div>'+
+      '<div class="meta-cell"><div class="meta-label">Rating</div><div class="meta-value amber">'+(stars?'★'.repeat(Math.min(5,stars)):'—')+'</div></div>'+
+      '<div class="meta-cell"><div class="meta-label">Identifier</div><div class="meta-value" style="font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(doc.identifier||'—')+'</div></div>'+
+      '<div class="meta-cell"><div class="meta-label">Archive.org</div><div class="meta-value"><a href="https://archive.org/details/'+(doc.identifier||'')+'" target="_blank" style="color:var(--amber);font-size:10px">View →</a></div></div>'+
+    '</div>';
+
+  if(releases.length){
+    html+='<div class="program-releases">';
+    releases.forEach(rel=>{
+      html+='<div class="release-row">';
+      if(rel.artwork)html+='<img class="release-thumb" src="'+rel.artwork+'" alt="'+rel.title+'">';
+      html+='<div class="release-info"><div class="release-name">'+rel.title+'</div><div class="release-type">'+rel.label+'</div></div>';
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+
+  if(description){
+    html+='<div class="program-description">'+description+(description.length>=200?"…":"")+'</div>';
+  }
+
+  header.innerHTML=html;
+  mainEl.appendChild(header);
+  header.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function renderSetlist(doc) {
+  const section=document.createElement("div");section.id="setlistBlock";section.className="setlist-section";
+
+  const showDate=isoDate(doc.date);
+  const headyPicks=getHeady(showDate);
+
+  // Try to detect set breaks
+  let currentSet=1;
+  let setHeaderAdded=false;
+  const setLabel=()=>{
+    const h=document.createElement("div");h.className="set-header";
+    h.textContent=currentSet===1?"Set I":currentSet===2?"Set II":"Encore";
+    section.appendChild(h);setHeaderAdded=true;
+  };
+  setLabel();
+
+  tracks.forEach((t,i)=>{
+    // Rough set break detection: if there's a big gap or > ~12 tracks, assume set break
+    if(i>0&&i===Math.floor(tracks.length*0.52)&&currentSet===1){
+      currentSet=2;setLabel();
+    } else if(i===tracks.length-1&&tracks.length>4&&currentSet===2){
+      // Encore — last track if named appropriately
+      const n=t.name.toLowerCase();
+      if(n.includes("encore")||i===tracks.length-1){currentSet=3;}
+    }
+
+    const row=document.createElement("div");row.className="track-row";
+
+    const tLower=t.name.toLowerCase();
+    const heady=headyPicks.find(h=>{
+      const s=h.song.toLowerCase();
+      return tLower.includes(s)||s.includes(tLower)||(s.split(" ")[0].length>3&&tLower.includes(s.split(" ")[0]));
+    });
+
+    const numEl=document.createElement("span");numEl.className="track-num";numEl.textContent=i+1;
+    const bodyEl=document.createElement("div");bodyEl.className="track-body";
+    const nameEl=document.createElement("div");nameEl.className="track-name";nameEl.id="tn-"+i;nameEl.textContent=t.name;
+    bodyEl.appendChild(nameEl);
+    if(heady){const hEl=document.createElement("div");hEl.className="track-heady";hEl.textContent="🔥 #"+heady.rank+" rated version · Heady Version";bodyEl.appendChild(hEl);}
+    const durEl=document.createElement("span");durEl.className="track-dur";durEl.textContent=t.duration?fmtTime(parseFloat(t.duration)):"";
+    const playEl=document.createElement("div");playEl.className="track-play";playEl.textContent="▶";
+
+    row.appendChild(numEl);row.appendChild(bodyEl);row.appendChild(durEl);row.appendChild(playEl);
+    row.addEventListener("click",()=>playTrack(i));
+    section.appendChild(row);
+  });
+
+  mainEl.appendChild(section);
+}
+
+// ── Playback ──
+function playTrack(idx) {
+  if(idx<0||idx>=tracks.length)return;
+  currentIdx=idx;
+  document.querySelectorAll(".track-name").forEach((el,i)=>el.classList.toggle("playing",i===idx));
+  audio.src=tracks[idx].url;audio.load();
+  audio.play().then(()=>{vizPlaying=true;playBtn.textContent="⏸";}).catch(()=>{});
+  playerTrack.textContent=tracks[idx].name;
+  playerShow.textContent=(activeShow?.venue||activeShow?.title||"")+" · "+(activeShow?.date||"");
+  const rel=getReleases(isoDate(activeShow?.date));
+  if(rel[0]){playerBadge.textContent=rel[0].title;playerBadge.style.display="block";}
+  else playerBadge.style.display="none";
+  playerEl.style.display="block";
+}
+
+function togglePlay(){
+  if(!audio.src)return;
+  if(audio.paused){audio.play();vizPlaying=true;playBtn.textContent="⏸";}
+  else{audio.pause();vizPlaying=false;playBtn.textContent="▶";}
+}
+
+audio.addEventListener("timeupdate",()=>{
+  if(audio.duration){
+    progressFill.style.width=(audio.currentTime/audio.duration*100)+"%";
+    timeElapsed.textContent=fmtTime(audio.currentTime);
+    timeDuration.textContent=fmtTime(audio.duration);
+  }
+});
+audio.addEventListener("ended",()=>{if(currentIdx<tracks.length-1)playTrack(currentIdx+1);else{vizPlaying=false;playBtn.textContent="▶";}});
+audio.addEventListener("error",()=>{if(currentIdx<tracks.length-1)setTimeout(()=>playTrack(currentIdx+1),500);});
+progressTrack.addEventListener("click",e=>{if(!audio.duration)return;const rect=progressTrack.getBoundingClientRect();audio.currentTime=((e.clientX-rect.left)/rect.width)*audio.duration;});
+playBtn.addEventListener("click",togglePlay);
+prevBtn.addEventListener("click",()=>{if(currentIdx>0)playTrack(currentIdx-1);});
+nextBtn.addEventListener("click",()=>{if(currentIdx<tracks.length-1)playTrack(currentIdx+1);});
+document.getElementById("searchBtn").addEventListener("click",doSearch);
+document.getElementById("searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();});
+
+// ── Boot ──
+async function init(){
+  try{
+    const r=await fetch("./dead_data.json");
+    const data=await r.json();
+    Object.assign(RELEASES,data.official_releases||{});
+    Object.keys(RELEASES).forEach(d=>REL_YEARS.add(d.slice(0,4)));
+    const songs=data.heady_songs||{};
+    for(const[name,sd]of Object.entries(songs)){
+      (sd.versions||[]).slice(0,5).forEach((v,i)=>{
+        const d=v.date;if(!d||d.length!==10)return;
+        if(!HEADY[d])HEADY[d]=[];
+        HEADY[d].push({song:name,rank:i+1});
+      });
+    }
+  }catch(e){console.warn("dead_data.json not loaded:",e);}
+  showYearGrid();
+}
+init();
+</script>
+</body>
+</html>
