@@ -299,6 +299,40 @@ body {
 /* ── SHOW LIST ── */
 .show-list { padding:0 16px;background:var(--black); }
 
+/* ── Map by State ── */
+.map-intro { padding:12px 16px; font-size:11px; color:var(--warm); line-height:1.6; background:var(--brown); }
+.cartogram-wrap { padding:16px; background:var(--ink); border-bottom:1px solid var(--rule); }
+.cartogram { display:grid; grid-template-columns:repeat(11,1fr); grid-template-rows:repeat(8,1fr); gap:3px; aspect-ratio:11/7; }
+.tile {
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.3);
+  transition: transform 0.1s, filter 0.1s;
+  position: relative;
+  padding: 0;
+}
+.tile:hover, .tile:active { transform: scale(1.08); z-index: 5; filter: brightness(1.2); }
+.tile-abbr { font-size: 10px; }
+.tile-count { font-size: 7px; opacity: 0.85; margin-top: 1px; }
+.tile.empty { visibility: hidden; cursor: default; }
+.tile.tile-no-shows { cursor:default; opacity:0.5; }
+.tile.tile-no-shows:hover, .tile.tile-no-shows:active { transform:none; filter:none; }
+.map-legend { display:flex; align-items:center; gap:6px; margin-top:10px; font-size:8px; color:var(--warm); letter-spacing:0.5px; }
+.legend-swatch { width:12px; height:12px; border-radius:2px; flex-shrink:0; }
+.state-swatch { width:10px; height:32px; border-radius:2px; flex-shrink:0; margin-right:2px; }
+.back-link { display:inline-flex; align-items:center; gap:6px; padding:12px 16px; font-size:10px; color:var(--gold-lt); cursor:pointer; }
+.map-detail-header { padding:0 16px 16px; }
+.map-detail-header h2 { font-family:'Playfair Display',serif; font-size:26px; font-weight:900; color:var(--cream); }
+.map-detail-sub { font-size:10px; color:var(--warm); margin-top:4px; letter-spacing:1px; }
+
+
 .show-row {
   display: flex;
   align-items: flex-start;
@@ -1253,6 +1287,7 @@ audio { display:none; }
     <button class="nav-tab" data-tab="notable" aria-selected="false">Notable</button>
     <button class="nav-tab" data-tab="releases" aria-selected="false">Releases</button>
     <button class="nav-tab" data-tab="favorites" aria-selected="false">Favorites</button>
+    <button class="nav-tab" data-tab="map" aria-selected="false">Map</button>
   </nav>
 </header>
 
@@ -1588,6 +1623,7 @@ document.querySelectorAll(".nav-tab").forEach(tab=>{
     else if(currentTab==="notable")showNotable();
     else if(currentTab==="releases")showReleases();
     else if(currentTab==="favorites")showFavorites();
+    else if(currentTab==="map")showMap();
   });
 });
 
@@ -1755,6 +1791,136 @@ function showReleases(){
   });
   mainEl.appendChild(list);
 }
+
+// ── MAP BY STATE ──
+const STATE_NAMES={CA:"California",NY:"New York",PA:"Pennsylvania",MA:"Massachusetts",IL:"Illinois",NJ:"New Jersey",OH:"Ohio",OR:"Oregon",CO:"Colorado",MD:"Maryland",WI:"Wisconsin",CT:"Connecticut",VA:"Virginia",GA:"Georgia",FL:"Florida",NC:"North Carolina",TX:"Texas",MI:"Michigan",IN:"Indiana",WA:"Washington",MN:"Minnesota",AZ:"Arizona",NV:"Nevada",RI:"Rhode Island",ME:"Maine",DC:"D.C.",KS:"Kansas",MO:"Missouri",UT:"Utah",OK:"Oklahoma",IA:"Iowa",LA:"Louisiana",KY:"Kentucky",NM:"New Mexico",TN:"Tennessee",HI:"Hawaii",AL:"Alabama",NE:"Nebraska",WV:"West Virginia",VT:"Vermont",MS:"Mississippi",AK:"Alaska",ID:"Idaho",SC:"South Carolina",MT:"Montana",NH:"New Hampshire"};
+const MAP_GRID=[
+  [null,null,null,null,null,null,null,null,null,null,"ME"],
+  [null,null,null,null,null,null,null,null,"VT","NH",null],
+  ["WA","ID","MT","ND","MN",null,null,"WI",null,"NY","MA"],
+  ["OR","NV","WY","SD","IA",null,"MI",null,"PA","NJ","CT"],
+  ["CA","UT","CO","NE","IL","IN","OH",null,"MD","RI",null],
+  [null,"AZ","NM","KS","MO","KY","WV","VA","DC",null,null],
+  ["AK",null,"TX","OK","AR","TN","NC","SC",null,null,null],
+  ["HI",null,null,"LA","MS","AL","GA",null,null,"FL",null],
+];
+
+function buildStateGroupings(){
+  const byState={},intl={};
+  Object.entries(GDSHOWS).forEach(([date,show])=>{
+    if(!show.country||show.country==="US"){
+      if(show.state)(byState[show.state]=byState[show.state]||[]).push({date,venue:show.venue,city:show.city});
+    } else {
+      (intl[show.country]=intl[show.country]||[]).push({date,venue:show.venue,city:show.city,country:show.country});
+    }
+  });
+  return{byState,intl};
+}
+
+function mapColorFor(count,max){
+  if(!count)return"#1A120A";
+  const t=Math.sqrt(count/max);
+  const r=Math.round(0x2A+(0xC8-0x2A)*t),g=Math.round(0x1A+(0x96-0x1A)*t),b=0x0A;
+  return`rgb(${r},${g},${b})`;
+}
+
+function showMap(){
+  currentTab="map";
+  setBreadcrumb([{label:"Map"}]);
+  mainEl.innerHTML="";
+  const{byState,intl}=buildStateGroupings();
+  const counts={};Object.keys(byState).forEach(st=>counts[st]=byState[st].length);
+  const maxCount=Math.max(...Object.values(counts));
+
+  const frag=document.createDocumentFragment();
+
+  const lbl1=document.createElement("div");lbl1.className="section-label";lbl1.textContent="— Browse by Place —";frag.appendChild(lbl1);
+  const intro=document.createElement("div");intro.className="map-intro";intro.textContent="Tap a state below, or use the map as a visual guide to where the touring concentrated. Darker tiles = more shows.";frag.appendChild(intro);
+
+  const cartoWrap=document.createElement("div");cartoWrap.className="cartogram-wrap";
+  const carto=document.createElement("div");carto.className="cartogram";
+  MAP_GRID.forEach(row=>row.forEach(st=>{
+    const tile=document.createElement("button");tile.type="button";
+    if(!st){tile.className="tile empty";carto.appendChild(tile);return;}
+    const count=counts[st]||0;
+    tile.className="tile"+(count?"":" tile-no-shows");
+    tile.style.background=mapColorFor(count,maxCount);
+    tile.style.color=count>maxCount*0.4?"#0F0A06":"#EDE8D5";
+    tile.innerHTML=`<span class="tile-abbr">${st}</span>${count?`<span class="tile-count">${count}</span>`:""}`;
+    if(count)tile.addEventListener("click",()=>showStateShows(st,byState[st]));
+    carto.appendChild(tile);
+  }));
+  cartoWrap.appendChild(carto);
+  const legend=document.createElement("div");legend.className="map-legend";
+  legend.innerHTML=`<div class="legend-swatch" style="background:#2A1A0A"></div><span>Fewer</span><div class="legend-swatch" style="background:#C8960A"></div><span>More shows</span>`;
+  cartoWrap.appendChild(legend);
+  frag.appendChild(cartoWrap);
+
+  const lbl2=document.createElement("div");lbl2.className="section-label";lbl2.textContent="— All States (A\u2013Z) —";frag.appendChild(lbl2);
+  const stateList=document.createElement("div");stateList.className="show-list";
+  Object.keys(byState).sort((a,b)=>(STATE_NAMES[a]||a).localeCompare(STATE_NAMES[b]||b)).forEach(st=>{
+    const count=counts[st];
+    const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+    row.innerHTML=`<div class="state-swatch" style="background:${mapColorFor(count,maxCount)}"></div>
+      <div class="show-info-col"><div class="show-venue-name">${STATE_NAMES[st]||st}</div><div class="show-location">${count} show${count===1?"":"s"}</div></div>
+      <div class="show-arrow">\u203a</div>`;
+    row.addEventListener("click",()=>showStateShows(st,byState[st]));
+    stateList.appendChild(row);
+  });
+  frag.appendChild(stateList);
+
+  if(Object.keys(intl).length){
+    const lbl3=document.createElement("div");lbl3.className="section-label";lbl3.textContent="— International —";frag.appendChild(lbl3);
+    const intlList=document.createElement("div");intlList.className="show-list";
+    Object.entries(intl).sort((a,b)=>b[1].length-a[1].length).forEach(([country,shows])=>{
+      const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+      row.innerHTML=`<div class="state-swatch" style="background:${mapColorFor(shows.length,24)}"></div>
+        <div class="show-info-col"><div class="show-venue-name">${country}</div><div class="show-location">${shows.length} show${shows.length===1?"":"s"}</div></div>
+        <div class="show-arrow">\u203a</div>`;
+      row.addEventListener("click",()=>showStateShows(country,shows));
+      intlList.appendChild(row);
+    });
+    frag.appendChild(intlList);
+  }
+
+  mainEl.appendChild(frag);
+}
+
+function showStateShows(stateCode,showsForState){
+  const label=STATE_NAMES[stateCode]||stateCode;
+  setBreadcrumb([{label:"Map",onclick:()=>showMap()},{label}]);
+  mainEl.innerHTML="";
+  const frag=document.createDocumentFragment();
+
+  const back=document.createElement("div");back.className="back-link";back.textContent="\u2190 Back";back.addEventListener("click",()=>showMap());frag.appendChild(back);
+
+  const sorted=[...showsForState].sort((a,b)=>a.date.localeCompare(b.date));
+  const years=sorted.map(s=>s.date.slice(0,4));
+  const header=document.createElement("div");header.className="map-detail-header";
+  header.innerHTML=`<h2>${label}</h2><div class="map-detail-sub">${sorted.length} show${sorted.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
+  frag.appendChild(header);
+
+  const list=document.createElement("div");list.className="show-list";
+  sorted.forEach(s=>{
+    const parts=s.date.split("-");
+    const day=parts[2]?parseInt(parts[2]):"?";
+    const month=parts[1]?MS[parseInt(parts[1])-1]:"";
+    const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+    const dateCol=document.createElement("div");dateCol.className="show-date-col";
+    dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br>${parts[0]}</div>`;
+    const infoCol=document.createElement("div");infoCol.className="show-info-col";
+    const venueEl=document.createElement("div");venueEl.className="show-venue-name";venueEl.textContent=s.venue;
+    const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=s.city+(s.country?", "+s.country:", "+stateCode);
+    infoCol.appendChild(venueEl);infoCol.appendChild(locEl);
+    const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="\u203a";
+    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date:s.date,venue:s.venue,coverage:locEl.textContent}));row.appendChild(arrow);
+    row.addEventListener("click",()=>loadShowByDate(s.date,s.venue,locEl.textContent));
+    list.appendChild(row);
+  });
+  frag.appendChild(list);
+  mainEl.appendChild(frag);
+}
+
 
 // ── RELEASE → SHOW LIST (intermediate screen for multi-show box sets) ──
 function showReleaseShows(rel,relDates){
@@ -2100,6 +2266,7 @@ function renderProgramHeader(doc,extra,targetEl){
     if(currentTab==="notable")showNotable();
     else if(currentTab==="releases")showReleases();
     else if(currentTab==="favorites")showFavorites();
+    else if(currentTab==="map")showMap();
     else if(currentYear)loadYear(currentYear);
     else showYearGrid();
   });
