@@ -586,6 +586,7 @@ body {
 .tag-source-sbd { color:var(--cream);background:#1A5C1A;border-color:#1A5C1A; }
 .tag-source-mtx { color:var(--cream);background:#1A1A5C;border-color:#1A1A5C; }
 .tag-source-aud { color:var(--cream);background:var(--brown);border-color:var(--brown); }
+.tag-source-fm  { color:var(--cream);background:#4A1A5C;border-color:#4A1A5C; }
 .tag-official   { color:var(--cream);background:var(--red);border-color:var(--red); }
 .tag-stars      { color:var(--cream);background:#6B4A00;border-color:#6B4A00; }
 .tag-reddit-buzz{ color:var(--cream);background:#8A1A0A;border-color:#8A1A0A; }
@@ -1422,11 +1423,12 @@ function parseSource(id){
   if(s.includes(".sbd.")||s.includes("sbd"))return"sbd";
   if(s.includes(".mtx.")||s.includes("mtx"))return"mtx";
   if(s.includes(".aud.")||s.includes("aud"))return"aud";
+  if(s.includes(".fm."))return"fm";
   return"rec";
 }
 
 function sourceLabel(src){
-  return{sbd:"Soundboard",mtx:"Matrix",aud:"Audience",rec:"Recording"}[src]||"Recording";
+  return{sbd:"Soundboard",mtx:"Matrix",aud:"Audience",fm:"FM Broadcast",rec:"Recording"}[src]||"Recording";
 }
 
 function calcRuntime(files){
@@ -2455,19 +2457,67 @@ function buildSetlist(doc){
   section.appendChild(toggle);
   section.appendChild(panel);
 
-  // Build set break map and segue map from gdshowsdb
+  // Build set break map and segue map from gdshowsdb.
+  //
+  // IMPORTANT: this is NOT a simple "song N of the setlist == track N of the
+  // audio" mapping. Audio releases often include extra non-musical tracks
+  // (Intro, Tuning, Crowd, Announcements) that don't correspond to any real
+  // setlist song. If we naively counted set lengths and applied that count
+  // as a literal track-array index, an extra "Intro" track shifts every
+  // subsequent index by one -- e.g. on 1975-06-17, gdshowsdb says Set I ends
+  // after 9 songs (so Set II "should" start at track index 9), but the real
+  // track list has Intro at index 0, pushing the real index-9 track to
+  // actually BE the 9th song (Franklin's Tower, the true end of Set I)
+  // instead of correctly remaining in Set I.
+  //
+  // Fix: walk the actual track list in order, and only advance through the
+  // flattened setlist-song list when a track's name actually matches the
+  // next expected song (via the same fuzzy matching used for heady-version
+  // lookups). Tracks that don't match anything (Intro, Tuning, etc.) are
+  // skipped without consuming a setlist position, so the alignment stays
+  // correct regardless of extra filler tracks.
   const gdshow=getGDShow(showDate);
   let setBreaks=[];   // [{at:trackIdx, label:"Set I"}]
   let segueAfter={};  // {trackIdx: true} — segues into next track
 
   if(gdshow&&gdshow.sets&&gdshow.sets.length>0){
-    let pos=0;
+    // Flatten into a single ordered list of {label, song, segued}, with a
+    // marker for the first song of each set.
+    const flat=[];
     gdshow.sets.forEach(set=>{
-      setBreaks.push({at:pos, label:set.label});
       set.songs.forEach((song,si)=>{
-        if(song.segued) segueAfter[pos+si]=true;
+        flat.push({label:set.label,isSetStart:si===0,song:song.name,segued:!!song.segued});
       });
-      pos+=set.songs.length;
+    });
+
+    // LOOKAHEAD_WINDOW guards against a single garbled/unrecognized track
+    // title (rare, but possible) permanently desyncing every subsequent
+    // track. Rather than only checking "does this track match the very next
+    // expected song", we check a small window ahead -- if it matches song
+    // N+2 instead of N+1, we treat N+1 as a real song we simply failed to
+    // recognize (still counted, just unlabeled) rather than as filler, and
+    // jump forward. This keeps one bad match from cascading through the
+    // rest of the show.
+    const LOOKAHEAD_WINDOW=3;
+    let songPos=0; // index into `flat`
+    tracks.forEach((t,i)=>{
+      let matchedAt=-1;
+      for(let look=0;look<LOOKAHEAD_WINDOW&&songPos+look<flat.length;look++){
+        if(headyMatch(flat[songPos+look].song,t.name)){matchedAt=songPos+look;break;}
+      }
+      if(matchedAt>=0){
+        // Apply set-start/segue markers for every position we're jumping
+        // past (including the matched one), so a skipped-but-real song
+        // still triggers its set header if it happened to start a set.
+        for(let p=songPos;p<=matchedAt;p++){
+          if(flat[p].isSetStart)setBreaks.push({at:i,label:flat[p].label});
+        }
+        if(flat[matchedAt].segued)segueAfter[i]=true;
+        songPos=matchedAt+1;
+      }
+      // else: track doesn't match the next expected setlist song (Intro,
+      // Tuning, Crowd noise, etc.) -- skip it without advancing songPos, so
+      // alignment with the real setlist is preserved for subsequent tracks.
     });
   }
 
