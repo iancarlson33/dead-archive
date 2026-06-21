@@ -597,13 +597,13 @@ body {
 /* Info accordion */
 .show-info-toggle {
   width: 100%;
-  background: none;
+  background: #2E5A78;
   border: none;
-  border-top: 1px solid rgba(0,0,0,0.2);
-  padding: 7px 0 0;
-  color: rgba(0,0,0,0.6);
+  padding: 12px 16px;
+  color: var(--cream);
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 9px;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
   text-align: left;
@@ -611,11 +611,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  opacity: 0.6;
 }
-.show-info-toggle:hover { opacity:1; }
-.setlist-toggle { color:var(--muted); border-top:none; padding:10px 16px; }
-.setlist-toggle:hover { color:var(--cream); }
+.show-info-toggle:hover { background:#356A8C; }
+.show-info-toggle .toggle-arrow { font-size: 14px; }
+.setlist-toggle { background:#A52E14; }
+.setlist-toggle:hover { background:#BC3618; }
+.reviews-toggle { background:#1A5C52; }
+.reviews-toggle:hover { background:#206E63; }
+.tracks-toggle { background:#6B4A00; }
+.tracks-toggle:hover { background:#7D5700; }
 .setlist-panel.setlist-panel { padding:0; background:none; border-bottom:none; }
 .reviews-panel.reviews-panel { padding:0; background:var(--ink); }
 .review-row { padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.06); }
@@ -655,25 +659,6 @@ body {
 
 /* ── VISUAL SETLIST — red band like poster body ── */
 .visual-setlist { background:var(--ink);border-bottom:2px solid var(--gold); }
-.visual-setlist-label {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 5px;
-  color: var(--black);
-  text-transform: uppercase;
-  padding: 7px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: var(--red);
-  border-bottom: 1px solid rgba(0,0,0,0.2);
-  width: 100%;
-  border: none;
-  cursor: pointer;
-}
-.visual-setlist-label:hover { opacity: 0.9; }
 .visual-setlist-panel { display:none;padding:0 0 12px; }
 .visual-setlist-panel.open { display:block; }
 .visual-set-block { padding:0 16px;margin-top:10px; }
@@ -2211,7 +2196,7 @@ function renderReviewsInto(reviews,targetEl){
 
   const sorted=[...reviews].sort((a,b)=>(b.reviewdate||"").localeCompare(a.reviewdate||""));
 
-  const toggle=document.createElement("button");toggle.className="show-info-toggle setlist-toggle";toggle.setAttribute("type","button");toggle.setAttribute("aria-expanded","false");
+  const toggle=document.createElement("button");toggle.className="show-info-toggle reviews-toggle";toggle.setAttribute("type","button");toggle.setAttribute("aria-expanded","false");
   toggle.innerHTML=`<span>Reviews (${reviews.length})</span><span class="toggle-arrow">▾</span>`;
   const panel=document.createElement("div");panel.className="show-info-panel setlist-panel reviews-panel";
 
@@ -2314,7 +2299,7 @@ function renderVisualSetlist(doc) {
   gdshow.sets.forEach(set => songCount += set.songs.length);
 
   const toggle = document.createElement("button");
-  toggle.className = "visual-setlist-label";
+  toggle.className = "show-info-toggle setlist-toggle visual-setlist-label";
   toggle.type = "button";
   toggle.setAttribute("aria-expanded", "false");
   toggle.innerHTML = `<span>Setlist (${songCount} song${songCount===1?"":"s"})</span><span class="toggle-arrow">▾</span>`;
@@ -2444,7 +2429,7 @@ function buildSetlist(doc){
 
   // Accordion toggle, matching the Show Info pattern. Tracks section starts open by default
   // (unlike Setlist/Show Info, which start closed) since playing audio is this app's core action.
-  const toggle=document.createElement("button");toggle.className="show-info-toggle setlist-toggle";toggle.setAttribute("type","button");toggle.setAttribute("aria-expanded","true");
+  const toggle=document.createElement("button");toggle.className="show-info-toggle tracks-toggle";toggle.setAttribute("type","button");toggle.setAttribute("aria-expanded","true");
   toggle.innerHTML=`<span>Tracks (${tracks.length})</span><span class="toggle-arrow">▴</span>`;
   const panel=document.createElement("div");panel.className="show-info-panel setlist-panel open";
 
