@@ -1912,12 +1912,18 @@ function showAttended(targetEl){
 }
 
 async function loadShowByDate(date,venue,location){
-  mainEl.innerHTML=`<div class="msg">Loading ${date}…</div>`;
-  const url=`https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+date%3A${date}&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=avg_rating+desc&rows=5&page=1&output=json`;
+  // gdshowsdb sometimes keys multiple same-day shows as e.g. "1969-06-21-0"
+  // and "1969-06-21-1" to disambiguate them. That suffix is purely an
+  // internal disambiguator -- archive.org has no concept of it, so it must
+  // be stripped before being used in a search query, or the query returns
+  // zero results for what is actually a perfectly real date.
+  const cleanDate=(date.match(/^(\d{4}-\d{2}-\d{2})/)||[date])[0];
+  mainEl.innerHTML=`<div class="msg">Loading ${cleanDate}…</div>`;
+  const url=`https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+date%3A${cleanDate}&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=avg_rating+desc&rows=5&page=1&output=json`;
   try{
     const r=await fetch(url);const data=await r.json();
     const docs=data.response?.docs||[];
-    if(!docs.length){mainEl.innerHTML=`<div class="error-msg">No recordings found for ${date}.</div>`;return;}
+    if(!docs.length){mainEl.innerHTML=`<div class="error-msg">No recordings found for ${cleanDate}.</div>`;return;}
     shows=docs;
     loadShow(0);
   }catch{mainEl.innerHTML=`<div class="error-msg">Could not reach archive.org.</div>`;}
