@@ -192,6 +192,24 @@ body {
 .nav-tab:hover { color:var(--bone); }
 .nav-tab.active { color:var(--gold);border-bottom-color:var(--gold); }
 
+.seg-toggle { display:flex; gap:2px; padding:12px 16px; background:var(--brown); }
+.seg-toggle-btn {
+  flex: 1;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 10px 8px;
+  border: 1px solid var(--rule);
+  background: var(--ink);
+  color: var(--warm);
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.seg-toggle-btn.active { background:var(--gold); color:var(--black); border-color:var(--gold); }
+
+
 /* ── BREADCRUMB ── */
 .breadcrumb {
   display: none;
@@ -446,6 +464,30 @@ body {
 
 /* ── NOTABLE GRID ── */
 .notable-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:12px 16px;background:var(--black); }
+
+.today-history-wrap { background:var(--black); border-bottom:1px solid var(--rule); }
+.today-history-label { background:var(--gold); color:var(--black); }
+.today-history-strip {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.today-history-strip::-webkit-scrollbar { display:none; }
+.today-history-card {
+  flex: 0 0 auto;
+  width: 150px;
+  background: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.today-history-card:active { background:var(--brown); }
+
 .notable-card {
   background: var(--ink);
   border: 1px solid var(--rule);
@@ -607,6 +649,24 @@ body {
   margin-left: 8px;
 }
 .show-row .fav-star.active { color: var(--red); -webkit-text-stroke: 1px var(--red); }
+
+.att-ticket {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.3;
+  filter: grayscale(1);
+  transition: opacity 0.15s, transform 0.1s, filter 0.15s;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+.att-ticket:hover { transform: scale(1.15); }
+.att-ticket.active { opacity: 1; filter: grayscale(0); }
+.att-ticket-lg { font-size: 18px; }
+.show-row .att-ticket { margin-left: 6px; }
 .show-banner-tags { display:flex;flex-wrap:wrap;gap:4px; }
 .show-banner-tag {
   font-family: 'IBM Plex Mono', monospace;
@@ -1495,9 +1555,10 @@ setInterval(()=>vizBars.forEach(b=>{
 
 // ── State ──
 let shows=[], activeShow=null, activeIdentifier=null, altRecordings=[], tracks=[], currentIdx=-1;
-let currentTab="years", currentYear=null, sourceFilter="all";
+let currentTab="years", currentYear=null, sourceFilter="all", favSubView="favorites";
 let recentShows = JSON.parse(localStorage.getItem("da_recent")||"[]");
 let favorites = JSON.parse(localStorage.getItem("da_favorites")||"[]");
+let attended = JSON.parse(localStorage.getItem("da_attended")||"[]");
 
 // ── Favorites ──
 function isFavorite(date){
@@ -1523,7 +1584,7 @@ function toggleFavorite(doc){
     el.classList.toggle("active",isFavorite(date));
     el.setAttribute("aria-pressed",isFavorite(date)?"true":"false");
   });
-  if(currentTab==="favorites")showFavorites();
+  if(currentTab==="favorites"&&favSubView==="favorites")showFavoritesView();
 }
 function makeFavoriteBtn(doc,size){
   const date=isoDate(doc.date);
@@ -1535,6 +1596,45 @@ function makeFavoriteBtn(doc,size){
   btn.setAttribute("aria-label","Toggle favorite");
   btn.textContent="★";
   btn.addEventListener("click",e=>{e.stopPropagation();toggleFavorite(doc);});
+  return btn;
+}
+
+// ── Attended (shows I was actually there for -- a factual personal-history
+// marker, distinct from Favorites which is just a taste/preference signal) ──
+function isAttended(date){
+  return attended.some(a=>a.date===date);
+}
+function toggleAttended(doc){
+  const date=isoDate(doc.date);
+  if(!date)return;
+  const idx=attended.findIndex(a=>a.date===date);
+  if(idx>=0){
+    attended.splice(idx,1);
+  } else {
+    attended.unshift({
+      date,
+      identifier:doc.identifier||"",
+      venue:doc.venue||doc.title||"Unknown Venue",
+      location:doc.coverage||""
+    });
+  }
+  localStorage.setItem("da_attended",JSON.stringify(attended));
+  document.querySelectorAll(`[data-att-date="${date}"]`).forEach(el=>{
+    el.classList.toggle("active",isAttended(date));
+    el.setAttribute("aria-pressed",isAttended(date)?"true":"false");
+  });
+  if(currentTab==="favorites"&&favSubView==="attended")showFavoritesView();
+}
+function makeAttendedBtn(doc,size){
+  const date=isoDate(doc.date);
+  const btn=document.createElement("button");
+  btn.className="att-ticket"+(size==="lg"?" att-ticket-lg":"")+(isAttended(date)?" active":"");
+  btn.type="button";
+  btn.dataset.attDate=date;
+  btn.setAttribute("aria-pressed",isAttended(date)?"true":"false");
+  btn.setAttribute("aria-label","Toggle attended");
+  btn.textContent="🎫";
+  btn.addEventListener("click",e=>{e.stopPropagation();toggleAttended(doc);});
   return btn;
 }
 
@@ -1622,12 +1722,46 @@ document.querySelectorAll(".nav-tab").forEach(tab=>{
     if(currentTab==="years")showYearGrid();
     else if(currentTab==="notable")showNotable();
     else if(currentTab==="releases")showReleases();
-    else if(currentTab==="favorites")showFavorites();
+    else if(currentTab==="favorites")showFavoritesView();
     else if(currentTab==="map")showMap();
   });
 });
 
 // ── YEAR GRID ──
+// ── TODAY IN GRATEFUL DEAD HISTORY ──
+function buildTodayInHistory(){
+  const now=new Date();
+  const mm=String(now.getMonth()+1).padStart(2,"0");
+  const dd=String(now.getDate()).padStart(2,"0");
+  const mmdd=`${mm}-${dd}`;
+
+  const matches=[];
+  Object.entries(GDSHOWS).forEach(([date,show])=>{
+    const parts=date.split("-");
+    if(parts.length>=3&&`${parts[1]}-${parts[2]}`===mmdd)matches.push({date,show});
+  });
+  if(!matches.length)return null;
+
+  matches.sort((a,b)=>a.date.localeCompare(b.date));
+
+  const wrap=document.createElement("div");wrap.className="today-history-wrap";
+  const lbl=document.createElement("div");lbl.className="section-label today-history-label";
+  lbl.textContent=`— Today in Grateful Dead History: ${MS[now.getMonth()]} ${now.getDate()} —`;
+  wrap.appendChild(lbl);
+
+  const strip=document.createElement("div");strip.className="today-history-strip";
+  matches.forEach(({date,show})=>{
+    const year=date.slice(0,4);
+    const loc=[show.city,show.state||show.country].filter(Boolean).join(", ");
+    const card=document.createElement("button");card.className="today-history-card";card.setAttribute("type","button");
+    card.innerHTML=`<div class="notable-date">${year}</div><div class="notable-venue">${show.venue||"Unknown Venue"}</div><div class="notable-why">${loc}</div>`;
+    card.addEventListener("click",()=>loadShowByDate(date,show.venue,loc));
+    strip.appendChild(card);
+  });
+  wrap.appendChild(strip);
+  return wrap;
+}
+
 function showYearGrid(){
   currentYear=null;shows=[];
   setBreadcrumb(null);
@@ -1637,6 +1771,8 @@ function showYearGrid(){
   shareBtn.style.display="none";
 
   const frag=document.createDocumentFragment();
+  const todayWidget=buildTodayInHistory();
+  if(todayWidget)frag.appendChild(todayWidget);
   const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="— Browse by year —";frag.appendChild(lbl);
   const almanac=document.createElement("div");almanac.className="year-almanac";
   DEAD_YEARS.forEach(y=>{
@@ -1663,6 +1799,9 @@ function showNotable(){
     const favBtn=makeFavoriteBtn({date:s.date,venue:s.venue,coverage:s.location});
     favBtn.style.cssText+="position:absolute;top:10px;right:10px;";
     card.appendChild(favBtn);
+    const attBtn=makeAttendedBtn({date:s.date,venue:s.venue,coverage:s.location});
+    attBtn.style.cssText+="position:absolute;top:10px;right:30px;";
+    card.appendChild(attBtn);
     card.addEventListener("click",()=>loadShowByDate(s.date,s.venue,s.location));
     grid.appendChild(card);
   });
@@ -1670,16 +1809,34 @@ function showNotable(){
 }
 
 // ── FAVORITES ──
-function showFavorites(){
+function showFavoritesView(){
+  favSubView=favSubView||"favorites";
   setBreadcrumb([{label:"Favorites"}]);
   mainEl.innerHTML="";
+
+  const toggleWrap=document.createElement("div");toggleWrap.className="seg-toggle";
+  const favBtn=document.createElement("button");favBtn.type="button";favBtn.className="seg-toggle-btn"+(favSubView==="favorites"?" active":"");favBtn.textContent=`★ Favorites (${favorites.length})`;
+  const attBtn=document.createElement("button");attBtn.type="button";attBtn.className="seg-toggle-btn"+(favSubView==="attended"?" active":"");attBtn.textContent=`🎫 Attended (${attended.length})`;
+  favBtn.addEventListener("click",()=>{favSubView="favorites";showFavoritesView();});
+  attBtn.addEventListener("click",()=>{favSubView="attended";showFavoritesView();});
+  toggleWrap.appendChild(favBtn);toggleWrap.appendChild(attBtn);
+  mainEl.appendChild(toggleWrap);
+
+  const contentEl=document.createElement("div");mainEl.appendChild(contentEl);
+  if(favSubView==="attended")showAttended(contentEl);
+  else showFavorites(contentEl);
+}
+
+function showFavorites(targetEl){
+  const root=targetEl||mainEl;
+  if(!targetEl){setBreadcrumb([{label:"Favorites"}]);root.innerHTML="";}
   const frag=document.createDocumentFragment();
 
   if(!favorites.length){
     const empty=document.createElement("div");empty.className="msg";
     empty.innerHTML=`No favorites yet.<br><span style="opacity:0.7;font-size:11px">Tap the ★ on any show to add it here.</span>`;
     frag.appendChild(empty);
-    mainEl.appendChild(frag);
+    root.appendChild(frag);
     return;
   }
 
@@ -1704,12 +1861,54 @@ function showFavorites(){
     infoCol.appendChild(venueEl);if(location)infoCol.appendChild(locEl);
 
     const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="›";
-    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date:fav.date,venue,coverage:location}));row.appendChild(arrow);
+    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date:fav.date,venue,coverage:location}));row.appendChild(makeAttendedBtn({date:fav.date,venue,coverage:location}));row.appendChild(arrow);
     row.addEventListener("click",()=>loadShowByDate(fav.date,venue,location));
     list.appendChild(row);
   });
   frag.appendChild(list);
-  mainEl.appendChild(frag);
+  root.appendChild(frag);
+}
+
+function showAttended(targetEl){
+  const root=targetEl||mainEl;
+  if(!targetEl){setBreadcrumb([{label:"Attended"}]);root.innerHTML="";}
+  const frag=document.createDocumentFragment();
+
+  if(!attended.length){
+    const empty=document.createElement("div");empty.className="msg";
+    empty.innerHTML=`No shows marked attended yet.<br><span style="opacity:0.7;font-size:11px">Tap the 🎫 on any show you were at to add it here.</span>`;
+    frag.appendChild(empty);
+    root.appendChild(frag);
+    return;
+  }
+
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`— ${attended.length} show${attended.length!==1?"s":""} attended —`;frag.appendChild(lbl);
+
+  const sorted=[...attended].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  const list=document.createElement("div");list.className="show-list";
+  sorted.forEach(att=>{
+    const parts=(att.date||"").split("-");
+    const day=parts[2]?parseInt(parts[2]):"?";
+    const month=parts[1]?MS[parseInt(parts[1])-1]:"";
+    const gdshow=getGDShow(att.date);
+    const venue=att.venue||gdshow?.venue||"Unknown Venue";
+    const location=att.location||(gdshow?[gdshow.city,gdshow.state].filter(Boolean).join(", "):"");
+
+    const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+    const dateCol=document.createElement("div");dateCol.className="show-date-col";
+    dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br>${parts[0]||""}</div>`;
+    const infoCol=document.createElement("div");infoCol.className="show-info-col";
+    const venueEl=document.createElement("div");venueEl.className="show-venue-name";venueEl.textContent=venue;
+    const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=location;
+    infoCol.appendChild(venueEl);if(location)infoCol.appendChild(locEl);
+
+    const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="›";
+    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date:att.date,venue,coverage:location}));row.appendChild(makeAttendedBtn({date:att.date,venue,coverage:location}));row.appendChild(arrow);
+    row.addEventListener("click",()=>loadShowByDate(att.date,venue,location));
+    list.appendChild(row);
+  });
+  frag.appendChild(list);
+  root.appendChild(frag);
 }
 
 async function loadShowByDate(date,venue,location){
@@ -1913,7 +2112,7 @@ function showStateShows(stateCode,showsForState){
     const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=s.city+(s.country?", "+s.country:", "+stateCode);
     infoCol.appendChild(venueEl);infoCol.appendChild(locEl);
     const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="\u203a";
-    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date:s.date,venue:s.venue,coverage:locEl.textContent}));row.appendChild(arrow);
+    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date:s.date,venue:s.venue,coverage:locEl.textContent}));row.appendChild(makeAttendedBtn({date:s.date,venue:s.venue,coverage:locEl.textContent}));row.appendChild(arrow);
     row.addEventListener("click",()=>loadShowByDate(s.date,s.venue,locEl.textContent));
     list.appendChild(row);
   });
@@ -1957,7 +2156,7 @@ function showReleaseShows(rel,relDates){
     infoCol.appendChild(venueEl);if(location)infoCol.appendChild(locEl);
 
     const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="›";
-    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date,venue,coverage:location}));row.appendChild(arrow);
+    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date,venue,coverage:location}));row.appendChild(makeAttendedBtn({date,venue,coverage:location}));row.appendChild(arrow);
     row.addEventListener("click",()=>loadShowByDate(date,venue,location));
     list.appendChild(row);
   });
@@ -2061,7 +2260,7 @@ function renderShowList(year){
     qp.addEventListener("click",e=>{e.stopPropagation();quickPlayShow(origIdx);});
 
     const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="›";
-    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(qp);row.appendChild(makeFavoriteBtn(doc));row.appendChild(arrow);
+    row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(qp);row.appendChild(makeFavoriteBtn(doc));row.appendChild(makeAttendedBtn(doc));row.appendChild(arrow);
     row.addEventListener("click",()=>loadShow(origIdx));
     list.appendChild(row);
   });
@@ -2265,7 +2464,7 @@ function renderProgramHeader(doc,extra,targetEl){
     window.history.replaceState({},"",window.location.pathname);
     if(currentTab==="notable")showNotable();
     else if(currentTab==="releases")showReleases();
-    else if(currentTab==="favorites")showFavorites();
+    else if(currentTab==="favorites")showFavoritesView();
     else if(currentTab==="map")showMap();
     else if(currentYear)loadYear(currentYear);
     else showYearGrid();
@@ -2286,6 +2485,7 @@ function renderProgramHeader(doc,extra,targetEl){
   const venueEl=document.createElement("div");venueEl.className="show-banner-venue";venueEl.textContent=venue;
   venueRow.appendChild(venueEl);
   venueRow.appendChild(makeFavoriteBtn(doc,"lg"));
+  venueRow.appendChild(makeAttendedBtn(doc,"lg"));
   const locEl=document.createElement("div");locEl.className="show-banner-location";locEl.textContent=location;
 
   const tagsEl=document.createElement("div");tagsEl.className="show-banner-tags";
