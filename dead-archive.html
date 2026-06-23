@@ -2937,11 +2937,21 @@ function playTrack(idx){
 
   // Lock-screen / Now Playing metadata. Without this, iOS shows a blank
   // artwork placeholder since the browser never told it what's playing.
+  //
+  // NOTE: iOS's compact lock-screen widget only renders two lines of text
+  // (title + one subtitle), so the separate "album" field with the date was
+  // never actually shown -- confirmed across two different real shows on a
+  // real device, not a code bug. Fix: combine venue + date into the single
+  // subtitle line that iOS does render, instead of splitting them across
+  // artist/album and losing one.
   if("mediaSession" in navigator){
+    const showDateLabel=activeShow?.date?MS[parseInt(activeShow.date.slice(5,7))-1]+" "+activeShow.date.slice(8,10)+", "+activeShow.date.slice(0,4):"";
+    const venueLabel=activeShow?.venue||activeShow?.title||"";
+    const subtitle=[venueLabel,showDateLabel].filter(Boolean).join(" · ")||"Dead Archive";
     navigator.mediaSession.metadata=new MediaMetadata({
       title:tracks[idx].name,
-      artist:(activeShow?.venue||activeShow?.title||"Dead Archive"),
-      album:(activeShow?.date?MS[parseInt(activeShow.date.slice(5,7))-1]+" "+activeShow.date.slice(8,10)+", "+activeShow.date.slice(0,4):"Dead Archive"),
+      artist:subtitle,
+      album:"Dead Archive",
       artwork:[
         {src:SYF_ARTWORK,sizes:"320x320",type:"image/png"}
       ]
