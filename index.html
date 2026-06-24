@@ -2083,7 +2083,7 @@ function showMap(){
       row.innerHTML=`<div class="state-swatch" style="background:${mapColorFor(shows.length,24)}"></div>
         <div class="show-info-col"><div class="show-venue-name">${country}</div><div class="show-location">${shows.length} show${shows.length===1?"":"s"}</div></div>
         <div class="show-arrow">\u203a</div>`;
-      row.addEventListener("click",()=>showStateShows(country,shows));
+      row.addEventListener("click",()=>showCountryShows(country,shows));
       intlList.appendChild(row);
     });
     frag.appendChild(intlList);
@@ -2092,18 +2092,70 @@ function showMap(){
   mainEl.appendChild(frag);
 }
 
-function showStateShows(stateCode,showsForState){
+async function showStateShows(stateCode,showsForState){
   const label=STATE_NAMES[stateCode]||stateCode;
   setBreadcrumb([{label:"Map",onclick:()=>showMap()},{label}]);
+  activeShow=null;sourceFilter="all";
   mainEl.innerHTML="";
   const frag=document.createDocumentFragment();
-
   const back=document.createElement("div");back.className="back-link";back.textContent="\u2190 Back";back.addEventListener("click",()=>showMap());frag.appendChild(back);
 
-  const sorted=[...showsForState].sort((a,b)=>a.date.localeCompare(b.date));
+  const sortedGd=[...showsForState].sort((a,b)=>a.date.localeCompare(b.date));
+  const years=sortedGd.map(s=>s.date.slice(0,4));
+  const header=document.createElement("div");header.className="map-detail-header";
+  header.innerHTML=`<h2>${label}</h2><div class="map-detail-sub">${sortedGd.length} show${sortedGd.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
+  frag.appendChild(header);
+  const loadingEl=document.createElement("div");loadingEl.className="msg";loadingEl.textContent=`Loading ${label} recordings\u2026`;frag.appendChild(loadingEl);
+  mainEl.appendChild(frag);
+
+  // Fetch each distinct year this state has shows in (reusing the same
+  // pagination-safe per-year fetch as Browse-by-year), then keep only the
+  // dates that actually belong to this state. This gives the exact same
+  // archive.org recording data (star ratings, soundboard/audience source,
+  // etc.) that Browse-by-year has, rather than only the bare venue/city info
+  // gdshowsdb has locally.
+  const baseDateOf=(d)=>{const m=d.match(/^(\d{4}-\d{2}-\d{2})(-\d+)?$/);return m?m[1]:d;};
+  const stateDates=new Set(sortedGd.map(s=>baseDateOf(s.date)));
+  const distinctYears=[...new Set(years)];
+  const byDate={};
+  try{
+    for(const yr of distinctYears){
+      const yearData=await fetchYearRecordings(yr);
+      Object.entries(yearData).forEach(([d,doc])=>{
+        if(stateDates.has(d))byDate[d]=doc;
+      });
+    }
+  }catch{
+    mainEl.innerHTML=`<div class="error-msg">Could not reach archive.org. Check your connection.</div>`;
+    return;
+  }
+
+  // Not every show in gdshowsdb necessarily has a matching archive.org
+  // recording (rare, but possible) -- rather than fabricate an unclickable
+  // row for those, just note the discrepancy in the header if it happens.
+  const missingCount=sortedGd.length-Object.keys(byDate).length;
+
+  shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  if(!shows.length){mainEl.innerHTML=`<div class="error-msg">No recordings found for ${label}.</div>`;return;}
+  const rerender=()=>renderFilterableShowList(label,rerender);
+  renderFilterableShowList(label,rerender);
+  if(missingCount>0){
+    const note=document.createElement("div");note.className="msg";note.style.cssText="font-size:10px;opacity:0.6;padding:8px 16px";
+    note.textContent=`${missingCount} show${missingCount===1?"":"s"} listed in setlist data had no matching recording found.`;
+    mainEl.appendChild(note);
+  }
+}
+
+function showCountryShows(country,showsForCountry){
+  setBreadcrumb([{label:"Map",onclick:()=>showMap()},{label:country}]);
+  mainEl.innerHTML="";
+  const frag=document.createDocumentFragment();
+  const back=document.createElement("div");back.className="back-link";back.textContent="\u2190 Back";back.addEventListener("click",()=>showMap());frag.appendChild(back);
+
+  const sorted=[...showsForCountry].sort((a,b)=>a.date.localeCompare(b.date));
   const years=sorted.map(s=>s.date.slice(0,4));
   const header=document.createElement("div");header.className="map-detail-header";
-  header.innerHTML=`<h2>${label}</h2><div class="map-detail-sub">${sorted.length} show${sorted.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
+  header.innerHTML=`<h2>${country}</h2><div class="map-detail-sub">${sorted.length} show${sorted.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
   frag.appendChild(header);
 
   const list=document.createElement("div");list.className="show-list";
@@ -2116,7 +2168,7 @@ function showStateShows(stateCode,showsForState){
     dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br>${parts[0]}</div>`;
     const infoCol=document.createElement("div");infoCol.className="show-info-col";
     const venueEl=document.createElement("div");venueEl.className="show-venue-name";venueEl.textContent=s.venue;
-    const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=s.city+(s.country?", "+s.country:", "+stateCode);
+    const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=s.city+(s.country?", "+s.country:"");
     infoCol.appendChild(venueEl);infoCol.appendChild(locEl);
     const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="\u203a";
     row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date:s.date,venue:s.venue,coverage:locEl.textContent}));row.appendChild(makeAttendedBtn({date:s.date,venue:s.venue,coverage:locEl.textContent}));row.appendChild(arrow);
@@ -2172,6 +2224,28 @@ function showReleaseShows(rel,relDates){
 }
 
 // ── LOAD YEAR ──
+async function fetchYearRecordings(year){
+  const ROWS_PER_PAGE=500;
+  const byDate={};
+  let page=1, numFound=Infinity, fetched=0;
+  while(fetched<numFound){
+    const url=`https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+date%3A${year}&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=date+asc&rows=${ROWS_PER_PAGE}&page=${page}&output=json`;
+    const r=await fetch(url);if(!r.ok)throw new Error();
+    const data=await r.json();
+    numFound=data.response?.numFound??0;
+    const docs=data.response?.docs||[];
+    docs.forEach(doc=>{
+      const d=isoDate(doc.date);if(!d||!d.startsWith(String(year)))return;
+      if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc;
+    });
+    fetched+=docs.length;
+    if(docs.length===0)break;
+    page++;
+    if(page>20)break;
+  }
+  return byDate;
+}
+
 async function loadYear(year){
   currentYear=year;activeShow=null;shows=[];sourceFilter="all";
   document.getElementById("programHeader")?.remove();
@@ -2181,25 +2255,8 @@ async function loadYear(year){
   setBreadcrumb([{label:String(year)}]);
   mainEl.innerHTML=`<div class="msg">Loading ${year}…</div>`;
 
-  const ROWS_PER_PAGE=500;
   try{
-    const byDate={};
-    let page=1, numFound=Infinity, fetched=0;
-    while(fetched<numFound){
-      const url=`https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+date%3A${year}&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=date+asc&rows=${ROWS_PER_PAGE}&page=${page}&output=json`;
-      const r=await fetch(url);if(!r.ok)throw new Error();
-      const data=await r.json();
-      numFound=data.response?.numFound??0;
-      const docs=data.response?.docs||[];
-      docs.forEach(doc=>{
-        const d=isoDate(doc.date);if(!d||!d.startsWith(String(year)))return;
-        if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc;
-      });
-      fetched+=docs.length;
-      if(docs.length===0)break; // safety: avoid infinite loop if server returns fewer than expected
-      page++;
-      if(page>20)break; // hard safety cap (10,000 recordings) — should never realistically be hit per year
-    }
+    const byDate=await fetchYearRecordings(year);
     shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
     if(!shows.length){mainEl.innerHTML=`<div class="error-msg">No recordings found for ${year}.</div>`;return;}
     renderShowList(year);
@@ -2218,19 +2275,23 @@ function getFilteredShows(){
 }
 
 function renderShowList(year){
+  renderFilterableShowList(`${year}`,()=>renderShowList(year));
+}
+
+function renderFilterableShowList(labelSuffix,rerenderFn){
   const frag=document.createDocumentFragment();
 
   // Filter bar
   const filterBar=document.createElement("div");filterBar.className="filter-bar";filterBar.setAttribute("role","group");filterBar.setAttribute("aria-label","Filter shows");
   [["all","All"],["sbd","Soundboard"],["aud","Audience"],["released","Released"]].forEach(([val,label])=>{
     const chip=document.createElement("button");chip.className="filter-chip"+(sourceFilter===val?" active":"");chip.setAttribute("type","button");chip.setAttribute("aria-pressed",sourceFilter===val?"true":"false");chip.textContent=label;
-    chip.addEventListener("click",()=>{sourceFilter=val;renderShowList(year);});
+    chip.addEventListener("click",()=>{sourceFilter=val;rerenderFn();});
     filterBar.appendChild(chip);
   });
   frag.appendChild(filterBar);
 
   const filtered=getFilteredShows();
-  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`— ${filtered.length} show${filtered.length!==1?"s":""} · ${year} —`;frag.appendChild(lbl);
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`— ${filtered.length} show${filtered.length!==1?"s":""} · ${labelSuffix} —`;frag.appendChild(lbl);
 
   const list=document.createElement("div");list.className="show-list";
   filtered.forEach((doc,i)=>{
