@@ -2119,12 +2119,23 @@ async function showStateShows(stateCode,showsForState){
   const distinctYears=[...new Set(years)];
   const byDate={};
   try{
-    for(const yr of distinctYears){
-      const yearData=await fetchYearRecordings(yr);
-      Object.entries(yearData).forEach(([d,doc])=>{
-        if(stateDates.has(d))byDate[d]=doc;
-      });
+    // Fetch with bounded concurrency rather than fully sequential (slow for
+    // big states like CA with 31 years) or all-at-once (risks tripping
+    // archive.org's rate limiting, which has been reported to kick in after
+    // just a handful of simultaneous requests). 6 at a time is a reasonable
+    // middle ground.
+    const CONCURRENCY=6;
+    let nextIdx=0;
+    async function worker(){
+      while(nextIdx<distinctYears.length){
+        const yr=distinctYears[nextIdx++];
+        const yearData=await fetchYearRecordings(yr);
+        Object.entries(yearData).forEach(([d,doc])=>{
+          if(stateDates.has(d))byDate[d]=doc;
+        });
+      }
     }
+    await Promise.all(Array.from({length:Math.min(CONCURRENCY,distinctYears.length)},worker));
   }catch{
     mainEl.innerHTML=`<div class="error-msg">Could not reach archive.org. Check your connection.</div>`;
     return;
@@ -2137,8 +2148,8 @@ async function showStateShows(stateCode,showsForState){
 
   shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
   if(!shows.length){mainEl.innerHTML=`<div class="error-msg">No recordings found for ${label}.</div>`;return;}
-  const rerender=()=>renderFilterableShowList(label,rerender);
-  renderFilterableShowList(label,rerender);
+  const rerender=()=>renderFilterableShowList(label,rerender,true);
+  renderFilterableShowList(label,rerender,true);
   if(missingCount>0){
     const note=document.createElement("div");note.className="msg";note.style.cssText="font-size:10px;opacity:0.6;padding:8px 16px";
     note.textContent=`${missingCount} show${missingCount===1?"":"s"} listed in setlist data had no matching recording found.`;
@@ -2275,10 +2286,10 @@ function getFilteredShows(){
 }
 
 function renderShowList(year){
-  renderFilterableShowList(`${year}`,()=>renderShowList(year));
+  renderFilterableShowList(`${year}`,()=>renderShowList(year),false);
 }
 
-function renderFilterableShowList(labelSuffix,rerenderFn){
+function renderFilterableShowList(labelSuffix,rerenderFn,showYear){
   const frag=document.createDocumentFragment();
 
   // Filter bar
@@ -2309,7 +2320,9 @@ function renderFilterableShowList(labelSuffix,rerenderFn){
 
     const row=document.createElement("button");row.className="show-row"+(debut?" show-row-debut":"");row.setAttribute("type","button");row.dataset.idx=origIdx;
     const dateCol=document.createElement("div");dateCol.className="show-date-col";
-    dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}</div>`;
+    dateCol.innerHTML=showYear
+      ?`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br><span style="color:var(--gold);font-size:11px">${parts[0]||""}</span></div>`
+      :`<div class="show-day-num">${day}</div><div class="show-month-label">${month}</div>`;
     const infoCol=document.createElement("div");infoCol.className="show-info-col";
     const venueEl=document.createElement("div");venueEl.className="show-venue-name";venueEl.textContent=venue;
     if(debut){const d=document.createElement("span");d.className="show-debut-badge";d.textContent="✨ DEBUT";d.title="This show includes a song debut";venueEl.appendChild(d);}
@@ -2394,7 +2407,7 @@ function renderSearchResults(q){
 
     const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
     const dateCol=document.createElement("div");dateCol.className="show-date-col";
-    dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br><span style="color:var(--amber);font-size:11px">${year}</span></div>`;
+    dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br><span style="color:var(--gold);font-size:11px">${year}</span></div>`;
     const infoCol=document.createElement("div");infoCol.className="show-info-col";
     const venueEl=document.createElement("div");venueEl.className="show-venue-name";venueEl.textContent=venue;
     const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=doc.coverage||"";
