@@ -2108,34 +2108,37 @@ async function showStateShows(stateCode,showsForState){
   const loadingEl=document.createElement("div");loadingEl.className="msg";loadingEl.textContent=`Loading ${label} recordings\u2026`;frag.appendChild(loadingEl);
   mainEl.appendChild(frag);
 
-  // Fetch each distinct year this state has shows in (reusing the same
-  // pagination-safe per-year fetch as Browse-by-year), then keep only the
-  // dates that actually belong to this state. This gives the exact same
-  // archive.org recording data (star ratings, soundboard/audience source,
-  // etc.) that Browse-by-year has, rather than only the bare venue/city info
-  // gdshowsdb has locally.
+  // Query archive.org directly for this state's EXACT dates, batched into
+  // groups (a single query for all of e.g. California's 675 dates would be
+  // too long for a URL), instead of fetching each whole year's worldwide
+  // recordings and filtering client-side. This is both fewer total requests
+  // (e.g. ~14 batches for CA instead of 31 year-fetches) AND far less work
+  // per request, since archive.org only has to match a batch of specific
+  // dates rather than scan/return an entire year's global recordings.
   const baseDateOf=(d)=>{const m=d.match(/^(\d{4}-\d{2}-\d{2})(-\d+)?$/);return m?m[1]:d;};
-  const stateDates=new Set(sortedGd.map(s=>baseDateOf(s.date)));
-  const distinctYears=[...new Set(years)];
+  const stateDateList=[...new Set(sortedGd.map(s=>baseDateOf(s.date)))];
+  const BATCH_SIZE=50;
+  const batches=[];
+  for(let i=0;i<stateDateList.length;i+=BATCH_SIZE)batches.push(stateDateList.slice(i,i+BATCH_SIZE));
+
   const byDate={};
   try{
-    // Fetch with bounded concurrency rather than fully sequential (slow for
-    // big states like CA with 31 years) or all-at-once (risks tripping
-    // archive.org's rate limiting, which has been reported to kick in after
-    // just a handful of simultaneous requests). 6 at a time is a reasonable
-    // middle ground.
     const CONCURRENCY=6;
     let nextIdx=0;
     async function worker(){
-      while(nextIdx<distinctYears.length){
-        const yr=distinctYears[nextIdx++];
-        const yearData=await fetchYearRecordings(yr);
-        Object.entries(yearData).forEach(([d,doc])=>{
-          if(stateDates.has(d))byDate[d]=doc;
+      while(nextIdx<batches.length){
+        const batch=batches[nextIdx++];
+        const dateClause=batch.map(d=>`date:${d}`).join("+OR+");
+        const url=`https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+AND+(${dateClause})&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=date+asc&rows=500&page=1&output=json`;
+        const r=await fetch(url);if(!r.ok)throw new Error();
+        const data=await r.json();
+        (data.response?.docs||[]).forEach(doc=>{
+          const d=isoDate(doc.date);if(!d)return;
+          if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc;
         });
       }
     }
-    await Promise.all(Array.from({length:Math.min(CONCURRENCY,distinctYears.length)},worker));
+    await Promise.all(Array.from({length:Math.min(CONCURRENCY,batches.length)},worker));
   }catch{
     mainEl.innerHTML=`<div class="error-msg">Could not reach archive.org. Check your connection.</div>`;
     return;
