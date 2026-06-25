@@ -2235,26 +2235,36 @@ function showReleaseShows(rel,relDates){
 }
 
 // ── LOAD YEAR ──
-async function fetchYearRecordings(year){
-  const ROWS_PER_PAGE=500;
-  const byDate={};
-  let page=1, numFound=Infinity, fetched=0;
-  while(fetched<numFound){
-    const url=`https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+date%3A${year}&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=date+asc&rows=${ROWS_PER_PAGE}&page=${page}&output=json`;
-    const r=await fetch(url);if(!r.ok)throw new Error();
-    const data=await r.json();
-    numFound=data.response?.numFound??0;
-    const docs=data.response?.docs||[];
-    docs.forEach(doc=>{
-      const d=isoDate(doc.date);if(!d||!d.startsWith(String(year)))return;
-      if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc;
-    });
-    fetched+=docs.length;
-    if(docs.length===0)break;
-    page++;
-    if(page>20)break;
-  }
-  return byDate;
+const yearRecordingsCache={}; // year -> Promise<byDate>, cached for the life of the page
+
+function fetchYearRecordings(year){
+  if(yearRecordingsCache[year])return yearRecordingsCache[year];
+  const promise=(async()=>{
+    const ROWS_PER_PAGE=500;
+    const byDate={};
+    let page=1, numFound=Infinity, fetched=0;
+    while(fetched<numFound){
+      const url=`https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+date%3A${year}&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=date+asc&rows=${ROWS_PER_PAGE}&page=${page}&output=json`;
+      const r=await fetch(url);if(!r.ok)throw new Error();
+      const data=await r.json();
+      numFound=data.response?.numFound??0;
+      const docs=data.response?.docs||[];
+      docs.forEach(doc=>{
+        const d=isoDate(doc.date);if(!d||!d.startsWith(String(year)))return;
+        if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc;
+      });
+      fetched+=docs.length;
+      if(docs.length===0)break;
+      page++;
+      if(page>20)break;
+    }
+    return byDate;
+  })();
+  // If the fetch fails, drop it from the cache so a later retry can try
+  // again instead of being permanently stuck with a rejected promise.
+  promise.catch(()=>{delete yearRecordingsCache[year];});
+  yearRecordingsCache[year]=promise;
+  return promise;
 }
 
 async function loadYear(year){
