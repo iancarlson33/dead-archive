@@ -350,6 +350,87 @@ body {
 .map-detail-header h2 { font-family:'Playfair Display',serif; font-size:26px; font-weight:900; color:var(--cream); }
 .map-detail-sub { font-size:10px; color:var(--warm); margin-top:4px; letter-spacing:1px; }
 
+/* ── Guess the Year game ── */
+.game-entry-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: linear-gradient(135deg, var(--red) 0%, #8A1A0A 100%);
+  border: none;
+  border-bottom: 3px solid var(--gold);
+  padding: 16px;
+  cursor: pointer;
+  color: var(--cream);
+}
+.game-entry-title { font-family:'Playfair Display',serif; font-size:18px; font-weight:900; }
+.game-entry-sub { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--cream); opacity:0.85; margin-top:4px; }
+
+.gty-round { padding: 0 16px 24px; }
+.gty-song-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:900; color:var(--cream); margin-bottom:16px; }
+.gty-clip-controls { margin-bottom: 20px; }
+.gty-play-btn {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  background: var(--gold);
+  color: var(--black);
+  border: none;
+  padding: 12px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.gty-clip-progress { display:flex; align-items:center; gap:10px; }
+.gty-clip-bar { flex:1; height:6px; background:var(--brown); border-radius:3px; overflow:hidden; }
+.gty-clip-fill { height:100%; background:var(--gold); width:0%; transition:width 1s linear; }
+.gty-clip-progress span { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--warm); }
+
+.gty-guess-row { display:flex; gap:8px; margin-bottom: 16px; }
+.gty-year-input {
+  flex: 1;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 16px;
+  background: var(--ink);
+  border: 1px solid var(--rule);
+  color: var(--cream);
+  padding: 12px;
+  border-radius: 4px;
+}
+.gty-submit-btn {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--red);
+  color: var(--cream);
+  border: none;
+  padding: 12px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.gty-submit-btn:disabled, .gty-year-input:disabled { opacity: 0.5; }
+
+.gty-result { padding: 16px; background: var(--ink); border-radius: 4px; }
+.gty-correct { color: #7EC87E; font-weight: 700; font-family:'IBM Plex Mono',monospace; font-size: 13px; }
+.gty-close { color: var(--gold-lt); font-weight: 700; font-family:'IBM Plex Mono',monospace; font-size: 13px; }
+.gty-miss { color: var(--warm); font-weight: 700; font-family:'IBM Plex Mono',monospace; font-size: 13px; }
+.gty-reveal { font-family:'IBM Plex Mono',monospace; font-size: 11px; color: var(--warm); margin-top: 10px; line-height: 1.6; }
+.gty-reveal strong { color: var(--cream); font-family:'Playfair Display',serif; font-size: 14px; }
+.gty-view-show-btn, .gty-next-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.gty-view-show-btn { background: none; border: 1px solid var(--gold); color: var(--gold-lt); }
+.gty-next-btn { background: var(--gold); border: none; color: var(--black); }
+
+
 
 .show-row {
   display: flex;
@@ -1792,6 +1873,12 @@ function showYearGrid(){
 function showNotable(){
   setBreadcrumb([{label:"Notable shows"}]);
   mainEl.innerHTML="";
+
+  const gameCard=document.createElement("button");gameCard.className="game-entry-card";gameCard.setAttribute("type","button");
+  gameCard.innerHTML=`<div class="game-entry-title">🎲 Guess the Year</div><div class="game-entry-sub">Hear a random clip. Can you name the year?</div>`;
+  gameCard.addEventListener("click",()=>showGuessTheYear());
+  mainEl.appendChild(gameCard);
+
   const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="— Community picks & landmark shows —";mainEl.appendChild(lbl);
   const grid=document.createElement("div");grid.className="notable-grid";
   NOTABLE_SHOWS.forEach(s=>{
@@ -1809,7 +1896,176 @@ function showNotable(){
   mainEl.appendChild(grid);
 }
 
-// ── FAVORITES ──
+// ── GUESS THE YEAR GAME ──
+let gtyState=null; // {date, venue, location, songName, identifier, url, timer}
+
+function pickRandomShowDate(){
+  const dates=Object.keys(GDSHOWS);
+  return dates[Math.floor(Math.random()*dates.length)];
+}
+
+function pickRandomSong(show){
+  const allSongs=[];
+  (show.sets||[]).forEach(set=>set.songs.forEach(song=>allSongs.push(song.name)));
+  if(!allSongs.length)return null;
+  return allSongs[Math.floor(Math.random()*allSongs.length)];
+}
+
+async function findRandomClip(maxAttempts){
+  for(let attempt=0;attempt<maxAttempts;attempt++){
+    const rawDate=pickRandomShowDate();
+    const cleanDate=(rawDate.match(/^(\d{4}-\d{2}-\d{2})/)||[rawDate])[0];
+    const show=GDSHOWS[rawDate];
+    const songName=pickRandomSong(show);
+    if(!songName)continue;
+
+    try{
+      const searchUrl=`https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+date%3A${cleanDate}&fl[]=identifier,avg_rating&sort[]=avg_rating+desc&rows=3&page=1&output=json`;
+      const sr=await fetch(searchUrl);if(!sr.ok)continue;
+      const sdata=await sr.json();
+      const candidate=(sdata.response?.docs||[])[0];
+      if(!candidate)continue;
+
+      const metaRes=await fetch("https://archive.org/metadata/"+candidate.identifier);
+      if(!metaRes.ok)continue;
+      const meta=await metaRes.json();
+      let mp3s=(meta.files||[]).filter(f=>{const n=f.name.toLowerCase();return n.endsWith(".mp3")&&!n.includes("_vbr")&&!n.includes("_sample");});
+      if(!mp3s.length)continue;
+      mp3s.sort((a,b)=>trackOrder(a)-trackOrder(b));
+
+      // Try to find the specific random song among the real tracks (fuzzy
+      // match, same as heady-version matching elsewhere); if no track
+      // matches well enough, just fall back to any random track from this
+      // same recording rather than wasting the attempt entirely.
+      let chosen=mp3s.find(f=>headyMatch(songName,displayName(f)));
+      if(!chosen)chosen=mp3s[Math.floor(Math.random()*mp3s.length)];
+
+      return{
+        date:cleanDate,
+        venue:show.venue,
+        location:[show.city,show.state||show.country].filter(Boolean).join(", "),
+        songName:displayName(chosen),
+        identifier:candidate.identifier,
+        url:"https://archive.org/download/"+candidate.identifier+"/"+encodeURIComponent(chosen.name)
+      };
+    }catch{continue;}
+  }
+  return null;
+}
+
+function showGuessTheYear(){
+  setBreadcrumb([{label:"Notable shows",onclick:()=>showNotable()},{label:"Guess the Year"}]);
+  stopGtyClip();
+  mainEl.innerHTML="";
+  const frag=document.createDocumentFragment();
+  const back=document.createElement("div");back.className="back-link";back.textContent="← Back";back.addEventListener("click",()=>showNotable());frag.appendChild(back);
+
+  const header=document.createElement("div");header.className="map-detail-header";
+  header.innerHTML=`<h2>🎲 Guess the Year</h2><div class="map-detail-sub">Listen to a random clip, then guess the year it was played</div>`;
+  frag.appendChild(header);
+
+  const loadingEl=document.createElement("div");loadingEl.className="msg";loadingEl.id="gtyLoading";loadingEl.textContent="Finding a clip…";frag.appendChild(loadingEl);
+  mainEl.appendChild(frag);
+
+  loadGtyRound();
+}
+
+async function loadGtyRound(){
+  const loadingEl=document.getElementById("gtyLoading");
+  const clip=await findRandomClip(8);
+  if(!clip){
+    if(loadingEl)loadingEl.innerHTML=`Couldn't find a playable clip just now. <button type="button" class="gty-retry-link">Try again</button>`;
+    document.querySelector(".gty-retry-link")?.addEventListener("click",()=>loadGtyRound());
+    return;
+  }
+  gtyState=clip;
+  renderGtyRound();
+}
+
+function renderGtyRound(){
+  document.getElementById("gtyLoading")?.remove();
+  document.querySelector(".gty-round")?.remove();
+
+  const round=document.createElement("div");round.className="gty-round";
+  round.innerHTML=`
+    <div class="gty-song-name">${gtyState.songName}</div>
+    <div class="gty-clip-controls">
+      <button type="button" class="gty-play-btn" id="gtyPlayBtn">▶ Play 60s clip</button>
+      <div class="gty-clip-progress" id="gtyProgress" style="display:none">
+        <div class="gty-clip-bar"><div class="gty-clip-fill" id="gtyFill"></div></div>
+        <span id="gtyTimeLeft">0:60</span>
+      </div>
+    </div>
+    <div class="gty-guess-row">
+      <input type="number" class="gty-year-input" id="gtyYearInput" placeholder="Year, e.g. 1977" min="1965" max="1995">
+      <button type="button" class="gty-submit-btn" id="gtySubmitBtn">Guess</button>
+    </div>
+    <div class="gty-result" id="gtyResult" style="display:none"></div>
+  `;
+  mainEl.appendChild(round);
+
+  document.getElementById("gtyPlayBtn").addEventListener("click",playGtyClip);
+  document.getElementById("gtySubmitBtn").addEventListener("click",submitGtyGuess);
+  document.getElementById("gtyYearInput").addEventListener("keydown",e=>{if(e.key==="Enter")submitGtyGuess();});
+}
+
+function playGtyClip(){
+  audio.pause();
+  audio.src=gtyState.url;
+  audio.currentTime=0;
+  audio.play().catch(()=>{});
+  document.getElementById("gtyPlayBtn").style.display="none";
+  const progressEl=document.getElementById("gtyProgress");
+  progressEl.style.display="flex";
+
+  let elapsed=0;
+  const CLIP_SECONDS=60;
+  gtyState.timer=setInterval(()=>{
+    elapsed+=1;
+    const pct=Math.min(100,(elapsed/CLIP_SECONDS)*100);
+    const fillEl=document.getElementById("gtyFill");
+    const timeEl=document.getElementById("gtyTimeLeft");
+    if(fillEl)fillEl.style.width=pct+"%";
+    if(timeEl)timeEl.textContent="0:"+String(Math.max(0,CLIP_SECONDS-elapsed)).padStart(2,"0");
+    if(elapsed>=CLIP_SECONDS)stopGtyClip();
+  },1000);
+}
+
+function stopGtyClip(){
+  if(gtyState?.timer){clearInterval(gtyState.timer);gtyState.timer=null;}
+  audio.pause();
+}
+
+function submitGtyGuess(){
+  const input=document.getElementById("gtyYearInput");
+  const guess=parseInt(input.value,10);
+  if(!guess||guess<1900||guess>2100)return;
+  stopGtyClip();
+
+  const actualYear=parseInt(gtyState.date.slice(0,4),10);
+  const diff=Math.abs(guess-actualYear);
+  const resultEl=document.getElementById("gtyResult");
+  resultEl.style.display="block";
+
+  let verdict;
+  if(diff===0)verdict=`<span class="gty-correct">🎯 Exactly right!</span>`;
+  else if(diff<=2)verdict=`<span class="gty-close">Close! Off by ${diff} year${diff===1?"":"s"}.</span>`;
+  else verdict=`<span class="gty-miss">Off by ${diff} years.</span>`;
+
+  resultEl.innerHTML=`
+    ${verdict}
+    <div class="gty-reveal">
+      <strong>${gtyState.venue}</strong><br>
+      ${gtyState.location} · ${MS[parseInt(gtyState.date.slice(5,7))-1]} ${parseInt(gtyState.date.slice(8,10))}, ${actualYear}
+    </div>
+    <button type="button" class="gty-view-show-btn" id="gtyViewShow">View this show →</button>
+    <button type="button" class="gty-next-btn" id="gtyNextBtn">Next clip →</button>
+  `;
+  document.getElementById("gtyYearInput").disabled=true;
+  document.getElementById("gtySubmitBtn").disabled=true;
+  document.getElementById("gtyViewShow").addEventListener("click",()=>loadShowByDate(gtyState.date,gtyState.venue,gtyState.location));
+  document.getElementById("gtyNextBtn").addEventListener("click",()=>showGuessTheYear());
+}
 function showFavoritesView(){
   favSubView=favSubView||"favorites";
   setBreadcrumb([{label:"Favorites"}]);
