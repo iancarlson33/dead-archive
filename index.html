@@ -883,6 +883,17 @@ body {
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
+.heady-song-header {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--cream);
+  background: var(--brown);
+  padding: 10px 16px;
+  border-top: 2px solid var(--gold);
+}
+.heady-rank { color: #7EC87E; font-family:'IBM Plex Mono',monospace; font-weight: 700; }
+.heady-description { font-family:'IBM Plex Mono',monospace; font-size: 9px; color: var(--warm); margin-top: 4px; font-style: italic; }
 .visual-debut-badge {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 9px;
@@ -1488,6 +1499,7 @@ audio { display:none; }
 // ── Data ──
 const RELEASES  = {};
 const HEADY     = {};
+const HEADY_SONGS = {}; // song name -> {id, url, versions:[{date,venue,votes,description}]} -- retains the full data for search, since HEADY above only keeps a flattened date-keyed view
 const SETLISTS  = {};
 const GDSHOWS   = {};
 const REDDIT    = {};
@@ -1536,6 +1548,17 @@ function normalizeSongName(s){
 }
 function getJerrybaseSong(trackName){
   return JERRYBASE_SONGS[normalizeSongName(trackName)]||null;
+}
+function findHeadySongMatches(query){
+  const nq=normalizeSongName(query);
+  if(!nq||nq.length<2)return[];
+  const matches=[];
+  for(const[name,sd]of Object.entries(HEADY_SONGS)){
+    const nn=normalizeSongName(name);
+    if(nn===nq){matches.unshift([name,sd]);} // exact match goes first
+    else if(nn.includes(nq)||nq.includes(nn)){matches.push([name,sd]);}
+  }
+  return matches;
 }
 
 // Match a track/song name against a heady song name.
@@ -2640,6 +2663,17 @@ async function doSearch(){
   if(!q){showYearGrid();return;}
   if(/^\d{4}$/.test(q)&&parseInt(q)>=1965&&parseInt(q)<=1995){await loadYear(parseInt(q));return;}
 
+  // If the query matches a known song with ranked heady versions, show those
+  // directly rather than falling through to a generic archive.org text
+  // search -- someone typing a song title is almost certainly looking for
+  // "where can I hear this song," not shows whose description happens to
+  // mention that word.
+  const headyMatches=findHeadySongMatches(q);
+  if(headyMatches.length){
+    renderHeadySearchResults(q,headyMatches);
+    return;
+  }
+
   activeShow=null;shows=[];sourceFilter="all";
   document.getElementById("programHeader")?.remove();
   
@@ -2659,6 +2693,55 @@ async function doSearch(){
     renderSearchResults(q);
   }catch{mainEl.innerHTML=`<div class="error-msg">Could not reach archive.org.</div>`;}
 }
+
+function renderHeadySearchResults(q,matches){
+  activeShow=null;
+  document.getElementById("programHeader")?.remove();
+  document.getElementById("recordingSwitcher")?.remove();
+  shareBtn.style.display="none";
+  setBreadcrumb([{label:`"${q}"`}]);
+
+  const frag=document.createDocumentFragment();
+  const totalVersions=matches.reduce((sum,[,sd])=>sum+(sd.versions?.length||0),0);
+  const lbl=document.createElement("div");lbl.className="section-label";
+  lbl.textContent=`— 🔥 ${totalVersions} heady version${totalVersions===1?"":"s"} for "${q}" —`;
+  frag.appendChild(lbl);
+
+  matches.forEach(([songName,sd])=>{
+    if(matches.length>1){
+      const songHeader=document.createElement("div");songHeader.className="heady-song-header";songHeader.textContent=songName;
+      frag.appendChild(songHeader);
+    }
+    const list=document.createElement("div");list.className="show-list";
+    (sd.versions||[]).forEach((v,i)=>{
+      const gdshow=getGDShow(v.date);
+      const parts=(v.date||"").split("-");
+      const day=parts[2]?parseInt(parts[2]):"?";
+      const month=parts[1]?MS[parseInt(parts[1])-1]:"";
+      const venue=v.venue||gdshow?.venue||"Unknown Venue";
+      const location=gdshow?[gdshow.city,gdshow.state||gdshow.country].filter(Boolean).join(", "):"";
+
+      const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+      const dateCol=document.createElement("div");dateCol.className="show-date-col";
+      dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br><span style="color:var(--gold);font-size:11px">${parts[0]||""}</span></div>`;
+      const infoCol=document.createElement("div");infoCol.className="show-info-col";
+      const venueEl=document.createElement("div");venueEl.className="show-venue-name";
+      venueEl.innerHTML=`🔥 <span class="heady-rank">#${i+1}</span> ${venue}`;
+      const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=location;
+      infoCol.appendChild(venueEl);if(location)infoCol.appendChild(locEl);
+      if(v.description){const descEl=document.createElement("div");descEl.className="heady-description";descEl.textContent=v.description;infoCol.appendChild(descEl);}
+
+      const arrow=document.createElement("div");arrow.className="show-arrow";arrow.textContent="›";
+      row.appendChild(dateCol);row.appendChild(infoCol);row.appendChild(makeFavoriteBtn({date:v.date,venue,coverage:location}));row.appendChild(makeAttendedBtn({date:v.date,venue,coverage:location}));row.appendChild(arrow);
+      row.addEventListener("click",()=>loadShowByDate(v.date,venue,location));
+      list.appendChild(row);
+    });
+    frag.appendChild(list);
+  });
+
+  mainEl.innerHTML="";mainEl.appendChild(frag);
+}
+
 
 function renderSearchResults(q){
   const frag=document.createDocumentFragment();
@@ -3409,6 +3492,7 @@ async function init(){
     Object.assign(RELEASES,data.official_releases||{});
     Object.keys(RELEASES).forEach(d=>REL_YEARS.add(d.slice(0,4)));
     const songs=data.heady_songs||{};
+    Object.assign(HEADY_SONGS,songs);
     for(const[name,sd]of Object.entries(songs)){
       (sd.versions||[]).slice(0,5).forEach((v,i)=>{
         const d=v.date;if(!d||d.length!==10)return;
