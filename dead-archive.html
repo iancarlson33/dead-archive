@@ -2127,7 +2127,7 @@ function showFavorites(targetEl){
   sorted.forEach(fav=>{
     const parts=(fav.date||"").split("-");
     const day=parts[2]?parseInt(parts[2]):"?";
-    const month=parts[1]?MS[parseInt(parts[1])-1]:"";
+    const month=(parts[1]&&parseInt(parts[1])>=1&&parseInt(parts[1])<=12)?MS[parseInt(parts[1])-1]:"?";
     const gdshow=getGDShow(fav.date);
     const venue=fav.venue||gdshow?.venue||"Unknown Venue";
     const location=fav.location||(gdshow?[gdshow.city,gdshow.state].filter(Boolean).join(", "):"");
@@ -2169,7 +2169,7 @@ function showAttended(targetEl){
   sorted.forEach(att=>{
     const parts=(att.date||"").split("-");
     const day=parts[2]?parseInt(parts[2]):"?";
-    const month=parts[1]?MS[parseInt(parts[1])-1]:"";
+    const month=(parts[1]&&parseInt(parts[1])>=1&&parseInt(parts[1])<=12)?MS[parseInt(parts[1])-1]:"?";
     const gdshow=getGDShow(att.date);
     const venue=att.venue||gdshow?.venue||"Unknown Venue";
     const location=att.location||(gdshow?[gdshow.city,gdshow.state].filter(Boolean).join(", "):"");
@@ -2455,7 +2455,7 @@ function showCountryShows(country,showsForCountry){
   sorted.forEach(s=>{
     const parts=s.date.split("-");
     const day=parts[2]?parseInt(parts[2]):"?";
-    const month=parts[1]?MS[parseInt(parts[1])-1]:"";
+    const month=(parts[1]&&parseInt(parts[1])>=1&&parseInt(parts[1])<=12)?MS[parseInt(parts[1])-1]:"?";
     const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
     const dateCol=document.createElement("div");dateCol.className="show-date-col";
     dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br>${parts[0]}</div>`;
@@ -2495,7 +2495,7 @@ function showReleaseShows(rel,relDates){
     const gdshow=getGDShow(date);
     const parts=date.split("-");
     const day=parts[2]?parseInt(parts[2]):"?";
-    const month=parts[1]?MS[parseInt(parts[1])-1]:"";
+    const month=(parts[1]&&parseInt(parts[1])>=1&&parseInt(parts[1])<=12)?MS[parseInt(parts[1])-1]:"?";
     const venue=gdshow?.venue||"Unknown Venue";
     const location=gdshow?[gdshow.city,gdshow.state].filter(Boolean).join(", "):"";
 
@@ -2600,7 +2600,7 @@ function renderFilterableShowList(labelSuffix,rerenderFn,showYear){
   filtered.forEach((doc,i)=>{
     const parts=(doc.date||"").split("-");
     const day=parts[2]?parseInt(parts[2]):"?";
-    const month=parts[1]?MS[parseInt(parts[1])-1]:"";
+    const month=(parts[1]&&parseInt(parts[1])>=1&&parseInt(parts[1])<=12)?MS[parseInt(parts[1])-1]:"?";
     const venue=doc.venue||doc.title||"Unknown Venue";
     const stars=doc.avg_rating?Math.round(parseFloat(doc.avg_rating)):0;
     const releases=getReleases(isoDate(doc.date));
@@ -2717,8 +2717,9 @@ function renderHeadySearchResults(q,matches){
       const gdshow=getGDShow(v.date);
       const parts=(v.date||"").split("-");
       const day=parts[2]?parseInt(parts[2]):"?";
-      const month=parts[1]?MS[parseInt(parts[1])-1]:"";
-      const venue=v.venue||gdshow?.venue||"Unknown Venue";
+      const monthIdx=parts[1]?parseInt(parts[1])-1:-1;
+      const month=(monthIdx>=0&&monthIdx<12)?MS[monthIdx]:"?";
+      const venue=(v.venue||gdshow?.venue||"Unknown Venue").replace(/,\s*$/,"");
       const location=gdshow?[gdshow.city,gdshow.state||gdshow.country].filter(Boolean).join(", "):"";
 
       const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
@@ -2750,7 +2751,7 @@ function renderSearchResults(q){
   shows.forEach((doc,i)=>{
     const parts=(doc.date||"").split("-");
     const day=parts[2]?parseInt(parts[2]):"?";
-    const month=parts[1]?MS[parseInt(parts[1])-1]:"";
+    const month=(parts[1]&&parseInt(parts[1])>=1&&parseInt(parts[1])<=12)?MS[parseInt(parts[1])-1]:"?";
     const year=parts[0]||"";
     const venue=doc.venue||doc.title||"Unknown Venue";
     const stars=doc.avg_rating?Math.round(parseFloat(doc.avg_rating)):0;
