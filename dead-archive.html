@@ -3060,8 +3060,11 @@ function buildRecordingSwitcher(currentDoc,alts){
       item.classList.add("active");
       activeIdentifier=alt.identifier;
 
-      // Clear and reload just the tracks slot
+      // Clear and reload the tracks slot
       const slot=document.getElementById("tracksSlot");
+      // Reviews are recording-specific too — refresh that slot in parallel
+      const reviewsSlot=document.getElementById("reviewsSlot");
+      if(reviewsSlot)reviewsSlot.innerHTML='<div class="msg" style="color:var(--gold)">Loading reviews…</div>';
       if(slot){
         slot.innerHTML='<div class="msg" style="color:var(--gold)">Loading recording…</div>';
         try{
@@ -3069,11 +3072,15 @@ function buildRecordingSwitcher(currentDoc,alts){
           const meta=await r.json();
           let mp3s=(meta.files||[]).filter(f=>{const n=f.name.toLowerCase();return n.endsWith(".mp3")&&!n.includes("_vbr");});
           mp3s.sort((a,b)=>trackOrder(a)-trackOrder(b));
-          if(!mp3s.length){slot.innerHTML='<div class="error-msg">No audio found for this recording.</div>';return;}
+          if(!mp3s.length){slot.innerHTML='<div class="error-msg">No audio found for this recording.</div>';if(reviewsSlot)reviewsSlot.innerHTML="";return;}
           tracks=mp3s.map(f=>({name:displayName(f),url:"https://archive.org/download/"+alt.identifier+"/"+encodeURIComponent(f.name),duration:f.length||""}));
           slot.innerHTML="";
           renderSetlistInto(activeShow,slot);
-        }catch{slot.innerHTML='<div class="error-msg">Could not load recording.</div>';}
+          if(reviewsSlot)renderReviewsInto(meta.reviews||[],reviewsSlot);
+        }catch{
+          slot.innerHTML='<div class="error-msg">Could not load recording.</div>';
+          if(reviewsSlot)reviewsSlot.innerHTML="";
+        }
       }
     });
     list.appendChild(item);
