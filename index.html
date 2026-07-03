@@ -568,6 +568,8 @@ body {
   color: inherit;
 }
 .today-history-card:active { background:var(--brown); }
+.today-history-card.has-heady { border-color:#7EC87E; }
+.today-history-heady { font-family:'IBM Plex Mono',monospace;font-size:9px;color:#7EC87E;margin-top:4px;line-height:1.3; }
 
 .notable-card {
   background: var(--ink);
@@ -1858,8 +1860,15 @@ function buildTodayInHistory(){
   matches.forEach(({date,show})=>{
     const year=date.slice(0,4);
     const loc=[show.city,show.state||show.country].filter(Boolean).join(", ");
-    const card=document.createElement("button");card.className="today-history-card";card.setAttribute("type","button");
-    card.innerHTML=`<div class="notable-date">${year}</div><div class="notable-venue">${show.venue||"Unknown Venue"}</div><div class="notable-why">${loc}</div>`;
+    const headyPicks=getHeady(date);
+    const card=document.createElement("button");card.className="today-history-card"+(headyPicks.length?" has-heady":"");card.setAttribute("type","button");
+    let headyHTML="";
+    if(headyPicks.length){
+      const label=headyPicks.length===1?`🔥 Heady Pick: ${headyPicks[0].song}`:`🔥 ${headyPicks.length} Heady Picks`;
+      const tip=headyPicks.map(h=>`${h.song} (#${h.rank})`).join(", ");
+      headyHTML=`<div class="today-history-heady" title="${escapeHtml(tip)}">${escapeHtml(label)}</div>`;
+    }
+    card.innerHTML=`<div class="notable-date">${year}</div><div class="notable-venue">${show.venue||"Unknown Venue"}</div><div class="notable-why">${loc}</div>${headyHTML}`;
     card.addEventListener("click",()=>loadShowByDate(date,show.venue,loc));
     strip.appendChild(card);
   });
