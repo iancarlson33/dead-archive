@@ -209,6 +209,32 @@ body {
 }
 .seg-toggle-btn.active { background:var(--gold); color:var(--black); border-color:var(--gold); }
 
+/* ── INDEX SCRUBBER (iOS Contacts-style A–Z / year quick-scroll) ── */
+.index-section-header {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--brown); color: var(--gold);
+  font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700;
+  padding:5px 16px; letter-spacing:2px;
+}
+.index-scrubber {
+  position: fixed; right: 2px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center;
+  z-index: 100; padding: 6px 5px; touch-action: none;
+  background: rgba(15,10,6,0.35); border-radius: 10px;
+}
+.index-scrubber-item {
+  font-family:'IBM Plex Mono',monospace; font-size: 9px; font-weight: 700;
+  color: var(--gold-lt); line-height: 1.5; padding: 0 4px;
+}
+.index-scrubber-bubble {
+  position: fixed; right: 34px; display: none;
+  align-items: center; justify-content: center;
+  background: var(--gold); color: var(--black);
+  font-family:'Playfair Display',serif; font-weight: 900; font-size: 26px;
+  width: 54px; height: 54px; border-radius: 50%;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5); z-index: 101;
+}
+
 
 /* ── BREADCRUMB ── */
 .breadcrumb {
@@ -2013,25 +2039,90 @@ function renderVenueFacet(targetEl){
   targetEl.appendChild(list);
 }
 
+// Reusable iOS-Contacts-style index scrubber: a fixed strip of letter/year
+// labels on the right edge. Touch-drag (or mouse-drag) jumps the list to the
+// matching section instantly as the finger moves, without needing to lift
+// and re-tap. `sections` is [{label, elId}] in on-screen order; `elId` must
+// match a sticky .index-section-header already inserted into targetEl.
+// Appended as a child of targetEl (not document.body) so it's automatically
+// torn down whenever the view re-renders via mainEl.innerHTML="".
+function attachIndexScrubber(targetEl,sections){
+  if(sections.length<3)return; // not worth it for short lists
+  const scrubber=document.createElement("div");scrubber.className="index-scrubber";
+  sections.forEach(s=>{
+    const item=document.createElement("div");item.className="index-scrubber-item";item.textContent=s.label;
+    scrubber.appendChild(item);
+  });
+  const bubble=document.createElement("div");bubble.className="index-scrubber-bubble";
+  targetEl.appendChild(scrubber);targetEl.appendChild(bubble);
+
+  function jumpToY(clientY){
+    const rect=scrubber.getBoundingClientRect();
+    let idx=Math.floor((clientY-rect.top)/rect.height*sections.length);
+    idx=Math.max(0,Math.min(sections.length-1,idx));
+    const sec=sections[idx];
+    document.getElementById(sec.elId)?.scrollIntoView({block:"start"});
+    bubble.textContent=sec.label;
+    bubble.style.display="flex";
+    bubble.style.top=Math.max(20,clientY-27)+"px";
+  }
+  function onMouseMove(e){jumpToY(e.clientY);}
+  function onMouseUp(){
+    bubble.style.display="none";
+    window.removeEventListener("mousemove",onMouseMove);
+    window.removeEventListener("mouseup",onMouseUp);
+  }
+  scrubber.addEventListener("touchstart",e=>{jumpToY(e.touches[0].clientY);e.preventDefault();},{passive:false});
+  scrubber.addEventListener("touchmove",e=>{jumpToY(e.touches[0].clientY);e.preventDefault();},{passive:false});
+  scrubber.addEventListener("touchend",()=>{bubble.style.display="none";});
+  scrubber.addEventListener("touchcancel",()=>{bubble.style.display="none";});
+  scrubber.addEventListener("mousedown",e=>{
+    jumpToY(e.clientY);
+    window.addEventListener("mousemove",onMouseMove);
+    window.addEventListener("mouseup",onMouseUp);
+  });
+}
+
 function renderTourFacet(targetEl){
   const tours=Object.values(TOUR_INDEX).sort((a,b)=>(a.dates[0]||"").localeCompare(b.dates[0]||""));
   const note=document.createElement("div");note.className="map-intro";note.textContent="Tour data comes from setlist.fm and mainly covers 1972 onward.";targetEl.appendChild(note);
   const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`— ${tours.length} tours —`;targetEl.appendChild(lbl);
   const list=document.createElement("div");list.className="show-list";
+  let lastYear=null;
+  const sections=[];
   tours.forEach(t=>{
+    const year=(t.dates[0]||"").slice(0,4)||"?";
+    if(year!==lastYear){
+      lastYear=year;
+      const secId=`tour-idx-${year}`;
+      const header=document.createElement("div");header.className="index-section-header";header.id=secId;header.textContent=year;
+      list.appendChild(header);
+      sections.push({label:year,elId:secId});
+    }
     const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
     row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">${t.name}</div><div class="show-location">${t.dates.length} show${t.dates.length===1?"":"s"}</div></div><div class="show-arrow">\u203a</div>`;
     row.addEventListener("click",()=>showTourShows(t));
     list.appendChild(row);
   });
   targetEl.appendChild(list);
+  attachIndexScrubber(targetEl,sections);
 }
 
 function renderSongFacet(targetEl){
   const songs=Object.values(SONG_INDEX).sort((a,b)=>a.name.localeCompare(b.name));
   const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`— ${songs.length} songs, A\u2013Z —`;targetEl.appendChild(lbl);
   const list=document.createElement("div");list.className="show-list";
+  let lastLetter=null;
+  const sections=[];
   songs.forEach(s=>{
+    const letter=/[A-Za-z]/.test(s.name[0])?s.name[0].toUpperCase():"#";
+    if(letter!==lastLetter){
+      lastLetter=letter;
+      const secId=`song-idx-${letter}`;
+      const header=document.createElement("div");header.className="index-section-header";header.id=secId;header.textContent=letter;
+      list.appendChild(header);
+      sections.push({label:letter,elId:secId});
+    }
     const perfCount=(s.jerrybase&&s.jerrybase.gd_performances)||s.dates.length;
     const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
     row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">${s.name}</div><div class="show-location">${perfCount} performance${perfCount===1?"":"s"}</div></div><div class="show-arrow">\u203a</div>`;
@@ -2039,6 +2130,7 @@ function renderSongFacet(targetEl){
     list.appendChild(row);
   });
   targetEl.appendChild(list);
+  attachIndexScrubber(targetEl,sections);
 }
 
 // ── NOTABLE SHOWS ──
@@ -3487,7 +3579,7 @@ function renderVisualSetlist(doc) {
       }
       nameLine.appendChild(name);
 
-      if (h && h.rank <= 3) {
+      if (h) {
         const badge = document.createElement("span");
         badge.className = "visual-heady";
         badge.textContent = "🔥 #" + h.rank;
