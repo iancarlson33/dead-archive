@@ -1502,10 +1502,16 @@ audio { display:none; }
 const RELEASES  = {};
 const HEADY     = {};
 const HEADY_SONGS = {}; // song name -> {id, url, versions:[{date,venue,votes,description}]} -- retains the full data for search, since HEADY above only keeps a flattened date-keyed view
+const HEADY_SONGS_NORM = {}; // normalizeSongTitle(name) -> {name, id, url, versions} -- excludes segue-pair keys ("A -> B"), used for song-detail heady lookups
 const SETLISTS  = {};
 const GDSHOWS   = {};
 const REDDIT    = {};
 const JERRYBASE_SONGS = {};
+const JERRYBASE_NORM = {}; // normalizeSongTitle(name) -> jerrybase song object, for case/spelling-tolerant lookup against gdshowsdb names
+const SONG_INDEX = {};  // normalizeSongTitle(name) -> {name, dates:[...], jerrybase:obj|null}
+const VENUE_INDEX = {}; // "venue|city|state" -> {venue, city, state, country, dates:[...]}
+const TOUR_INDEX = {};  // tour name -> {name, dates:[...]}
+const SEGUE_INDEX = []; // [{a,b,count,dates:[...]}], sorted by count desc
 const REL_YEARS = new Set();
 
 const MS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -1567,9 +1573,20 @@ function findHeadySongMatches(query){
 // Priority: 1) exact match  2) heady name is a substring of track (e.g. "China Cat Sunflower" in "China Cat Sunflower -> I Know You Rider")
 //           3) track is a substring of heady name  4) heady name is a single word of 5+ chars that appears as a whole word in track
 // Explicitly rejects cases where only a shared prefix word matches short tokens (e.g. "Sugar" matching "Sugaree" vs "Sugar Magnolia")
+// Normalizes a song title for fuzzy comparison. Handles two recurring
+// mismatches between gdshowsdb's setlist spelling and archive.org's track
+// titles: curly vs straight apostrophes, and gerund contractions -- e.g.
+// gdshowsdb has "Playing In The Band" but tape titles almost always say
+// "Playin' In The Band", which otherwise shares no matchable substring.
+function normalizeSongTitle(s) {
+  return s
+    .replace(/[\u2018\u2019]/g, "'")
+    .toLowerCase()
+    .replace(/in'(?!\w)/g, "ing"); // playin' -> playing, goin' -> going, etc.
+}
 function headyMatch(headySong, trackName) {
-  const h = headySong.toLowerCase().trim();
-  const t = trackName.toLowerCase().trim();
+  const h = normalizeSongTitle(headySong).trim();
+  const t = normalizeSongTitle(trackName).trim();
   if (h === t) return true;                        // exact
   if (t.includes(h)) return true;                 // heady is substring of track
   if (h.includes(t) && t.length > 4) return true; // track is substring of heady, non-trivial
@@ -1580,6 +1597,61 @@ function headyMatch(headySong, trackName) {
     return new RegExp("\\b" + h.replace(/[.*+?^${}()|[\]\\]/g,"\\$&") + "\\b").test(t);
   }
   return false;
+}
+
+// ── NAVIGATION INDEXES (Song / Venue / Tour / Segue-pair) ──
+// Built once from gdshowsdb + jerrybase_songs + setlists after init() loads
+// dead_data.json. These power the Browse facet switcher (Venue/Tour/Song)
+// and the Notable "Iconic Segues" chart.
+function buildNavIndexes(){
+  Object.entries(JERRYBASE_SONGS).forEach(([k,v])=>{
+    JERRYBASE_NORM[normalizeSongTitle(k)] = v;
+  });
+  Object.entries(HEADY_SONGS).forEach(([k,v])=>{
+    if(!k.includes("->"))HEADY_SONGS_NORM[normalizeSongTitle(k)] = Object.assign({name:k},v);
+  });
+
+  Object.entries(GDSHOWS).forEach(([date,show])=>{
+    (show.sets||[]).forEach(set=>{
+      set.songs.forEach(song=>{
+        if(/^unidentified/i.test(song.name))return;
+        const key=normalizeSongTitle(song.name);
+        if(!SONG_INDEX[key])SONG_INDEX[key]={name:song.name,dates:[],jerrybase:JERRYBASE_NORM[key]||null};
+        SONG_INDEX[key].dates.push(date);
+      });
+    });
+    if(show.venue){
+      const vkey=[show.venue,show.city,show.state||show.country].join("|");
+      if(!VENUE_INDEX[vkey])VENUE_INDEX[vkey]={venue:show.venue,city:show.city,state:show.state,country:show.country,dates:[]};
+      VENUE_INDEX[vkey].dates.push(date);
+    }
+    (show.sets||[]).forEach(set=>{
+      const songs=set.songs;
+      for(let i=0;i<songs.length-1;i++){
+        if(songs[i].segued){
+          const skey=songs[i].name+"\u2192"+songs[i+1].name;
+          let entry=SEGUE_INDEX.find(e=>e._key===skey);
+          if(!entry){entry={_key:skey,a:songs[i].name,b:songs[i+1].name,count:0,dates:[]};SEGUE_INDEX.push(entry);}
+          entry.count++;
+          entry.dates.push(date);
+        }
+      }
+    });
+  });
+  Object.values(SONG_INDEX).forEach(e=>{e.dates=[...new Set(e.dates)].sort();});
+  Object.values(VENUE_INDEX).forEach(e=>{e.dates=[...new Set(e.dates)].sort();});
+  SEGUE_INDEX.sort((a,b)=>b.count-a.count);
+
+  Object.entries(SETLISTS).forEach(([date,sl])=>{
+    if(!sl.tour)return;
+    if(!TOUR_INDEX[sl.tour])TOUR_INDEX[sl.tour]={name:sl.tour,dates:[]};
+    TOUR_INDEX[sl.tour].dates.push(date);
+  });
+  Object.values(TOUR_INDEX).forEach(e=>{e.dates=[...new Set(e.dates)].sort();});
+}
+function segueStartingWith(songName){
+  const key=normalizeSongTitle(songName);
+  return SEGUE_INDEX.filter(e=>normalizeSongTitle(e.a)===key).sort((a,b)=>b.count-a.count);
 }
 function fmtTime(s){if(!s||isNaN(s))return"0:00";return Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0")}
 
@@ -1662,7 +1734,7 @@ setInterval(()=>vizBars.forEach(b=>{
 
 // ── State ──
 let shows=[], activeShow=null, activeIdentifier=null, altRecordings=[], tracks=[], currentIdx=-1;
-let currentTab="years", currentYear=null, sourceFilter="all", favSubView="favorites";
+let currentTab="years", currentYear=null, sourceFilter="all", favSubView="favorites", browseFacet="year";
 let recentShows = JSON.parse(localStorage.getItem("da_recent")||"[]");
 let favorites = JSON.parse(localStorage.getItem("da_favorites")||"[]");
 let attended = JSON.parse(localStorage.getItem("da_attended")||"[]");
@@ -1887,7 +1959,34 @@ function showYearGrid(){
   const frag=document.createDocumentFragment();
   const todayWidget=buildTodayInHistory();
   if(todayWidget)frag.appendChild(todayWidget);
-  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="— Browse by year —";frag.appendChild(lbl);
+
+  frag.appendChild(buildBrowseFacetToggle());
+  const contentEl=document.createElement("div");
+  frag.appendChild(contentEl);
+
+  mainEl.innerHTML="";mainEl.appendChild(frag);
+  renderBrowseFacet(contentEl);
+}
+
+function buildBrowseFacetToggle(){
+  const wrap=document.createElement("div");wrap.className="seg-toggle";
+  [["year","Year"],["venue","Venue"],["tour","Tour"],["song","Song"]].forEach(([val,label])=>{
+    const btn=document.createElement("button");btn.type="button";btn.className="seg-toggle-btn"+(browseFacet===val?" active":"");btn.textContent=label;
+    btn.addEventListener("click",()=>{browseFacet=val;showYearGrid();});
+    wrap.appendChild(btn);
+  });
+  return wrap;
+}
+
+function renderBrowseFacet(targetEl){
+  if(browseFacet==="venue")renderVenueFacet(targetEl);
+  else if(browseFacet==="tour")renderTourFacet(targetEl);
+  else if(browseFacet==="song")renderSongFacet(targetEl);
+  else renderYearFacet(targetEl);
+}
+
+function renderYearFacet(targetEl){
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="— Browse by year —";targetEl.appendChild(lbl);
   const almanac=document.createElement("div");almanac.className="year-almanac";
   DEAD_YEARS.forEach(y=>{
     const hasRel=REL_YEARS.has(String(y));
@@ -1897,8 +1996,49 @@ function showYearGrid(){
     row.addEventListener("click",()=>loadYear(y));
     almanac.appendChild(row);
   });
-  frag.appendChild(almanac);
-  mainEl.innerHTML="";mainEl.appendChild(frag);
+  targetEl.appendChild(almanac);
+}
+
+function renderVenueFacet(targetEl){
+  const venues=Object.values(VENUE_INDEX).sort((a,b)=>b.dates.length-a.dates.length);
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`— ${venues.length} venues \u00b7 most-played first —`;targetEl.appendChild(lbl);
+  const list=document.createElement("div");list.className="show-list";
+  venues.forEach(v=>{
+    const loc=[v.city,v.state||v.country].filter(Boolean).join(", ");
+    const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+    row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">${v.venue}</div><div class="show-location">${loc}${loc?" \u00b7 ":""}${v.dates.length} show${v.dates.length===1?"":"s"}</div></div><div class="show-arrow">\u203a</div>`;
+    row.addEventListener("click",()=>showVenueShows(v));
+    list.appendChild(row);
+  });
+  targetEl.appendChild(list);
+}
+
+function renderTourFacet(targetEl){
+  const tours=Object.values(TOUR_INDEX).sort((a,b)=>(a.dates[0]||"").localeCompare(b.dates[0]||""));
+  const note=document.createElement("div");note.className="map-intro";note.textContent="Tour data comes from setlist.fm and mainly covers 1972 onward.";targetEl.appendChild(note);
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`— ${tours.length} tours —`;targetEl.appendChild(lbl);
+  const list=document.createElement("div");list.className="show-list";
+  tours.forEach(t=>{
+    const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+    row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">${t.name}</div><div class="show-location">${t.dates.length} show${t.dates.length===1?"":"s"}</div></div><div class="show-arrow">\u203a</div>`;
+    row.addEventListener("click",()=>showTourShows(t));
+    list.appendChild(row);
+  });
+  targetEl.appendChild(list);
+}
+
+function renderSongFacet(targetEl){
+  const songs=Object.values(SONG_INDEX).sort((a,b)=>a.name.localeCompare(b.name));
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`— ${songs.length} songs, A\u2013Z —`;targetEl.appendChild(lbl);
+  const list=document.createElement("div");list.className="show-list";
+  songs.forEach(s=>{
+    const perfCount=(s.jerrybase&&s.jerrybase.gd_performances)||s.dates.length;
+    const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+    row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">${s.name}</div><div class="show-location">${perfCount} performance${perfCount===1?"":"s"}</div></div><div class="show-arrow">\u203a</div>`;
+    row.addEventListener("click",()=>showSongDetail(s));
+    list.appendChild(row);
+  });
+  targetEl.appendChild(list);
 }
 
 // ── NOTABLE SHOWS ──
@@ -1926,6 +2066,17 @@ function showNotable(){
     grid.appendChild(card);
   });
   mainEl.appendChild(grid);
+
+  const segueLbl=document.createElement("div");segueLbl.className="section-label";segueLbl.textContent="— Iconic Segues —";mainEl.appendChild(segueLbl);
+  const segueIntro=document.createElement("div");segueIntro.className="map-intro";segueIntro.textContent="The most-played song transitions in Dead history, ranked by how often they happened.";mainEl.appendChild(segueIntro);
+  const segueGrid=document.createElement("div");segueGrid.className="notable-grid";
+  SEGUE_INDEX.slice(0,12).forEach(seg=>{
+    const card=document.createElement("button");card.className="notable-card";card.setAttribute("type","button");
+    card.innerHTML=`<div class="notable-date">${seg.count}\u00d7</div><div class="notable-venue">${seg.a} \u2192 ${seg.b}</div>`;
+    card.addEventListener("click",()=>showSegueShows(seg,()=>showNotable(),[{label:"Notable shows",onclick:()=>showNotable()}]));
+    segueGrid.appendChild(card);
+  });
+  mainEl.appendChild(segueGrid);
 }
 
 // ── GUESS THE YEAR GAME ──
@@ -2376,6 +2527,169 @@ function showMap(){
     });
     frag.appendChild(intlList);
   }
+
+  mainEl.appendChild(frag);
+}
+
+// Given a list of show dates, batch-queries archive.org for the best-rated
+// recording of each (same approach as the Map state drill-down), returning
+// {date: doc}. Shared by Venue, Tour, Song, and Segue-pair drill-downs.
+async function fetchRecordingsForDates(dateList){
+  const baseDateOf=(d)=>{const m=d.match(/^(\d{4}-\d{2}-\d{2})(-\d+)?$/);return m?m[1]:d;};
+  const uniqueDates=[...new Set(dateList.map(baseDateOf))];
+  const BATCH_SIZE=50;
+  const batches=[];
+  for(let i=0;i<uniqueDates.length;i+=BATCH_SIZE)batches.push(uniqueDates.slice(i,i+BATCH_SIZE));
+
+  const byDate={};
+  const CONCURRENCY=6;
+  let nextIdx=0;
+  async function worker(){
+    while(nextIdx<batches.length){
+      const batch=batches[nextIdx++];
+      const dateClause=batch.map(d=>`date:${d}`).join("+OR+");
+      const url=`https://archive.org/advancedsearch.php?q=creator%3A%22Grateful+Dead%22+AND+(${dateClause})&fl[]=identifier,title,date,venue,coverage,avg_rating&sort[]=date+asc&rows=500&page=1&output=json`;
+      const r=await fetch(url);if(!r.ok)throw new Error();
+      const data=await r.json();
+      (data.response?.docs||[]).forEach(doc=>{
+        const d=isoDate(doc.date);if(!d)return;
+        if(!byDate[d]||parseFloat(doc.avg_rating||0)>parseFloat(byDate[d].avg_rating||0))byDate[d]=doc;
+      });
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(CONCURRENCY,batches.length)},worker));
+  return byDate;
+}
+// Renders the standard "loading → filterable show list" flow used by Venue,
+// Tour, and Segue-pair drill-downs. crumbParts is the setBreadcrumb() array;
+// backFn returns to the index list; header is {title, sub} for the detail header.
+async function showDrillDownShows(dateList,crumbParts,backFn,header){
+  setBreadcrumb(crumbParts);
+  activeShow=null;sourceFilter="all";
+  mainEl.innerHTML="";
+  const frag=document.createDocumentFragment();
+  const back=document.createElement("div");back.className="back-link";back.textContent="\u2190 Back";back.addEventListener("click",backFn);frag.appendChild(back);
+
+  const sortedDates=[...dateList].sort();
+  const years=sortedDates.map(d=>d.slice(0,4));
+  const headerEl=document.createElement("div");headerEl.className="map-detail-header";
+  headerEl.innerHTML=`<h2>${header.title}</h2><div class="map-detail-sub">${header.sub?header.sub+" \u00b7 ":""}${sortedDates.length} show${sortedDates.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
+  frag.appendChild(headerEl);
+  const loadingEl=document.createElement("div");loadingEl.className="msg";loadingEl.textContent=`Loading ${header.title} recordings\u2026`;frag.appendChild(loadingEl);
+  mainEl.appendChild(frag);
+
+  let byDate;
+  try{ byDate=await fetchRecordingsForDates(sortedDates); }
+  catch{ mainEl.innerHTML=`<div class="error-msg">Could not reach archive.org. Check your connection.</div>`; return; }
+
+  const missingCount=sortedDates.length-Object.keys(byDate).length;
+  shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  if(!shows.length){mainEl.innerHTML=`<div class="error-msg">No recordings found for ${header.title}.</div>`;return;}
+  const rerender=()=>renderFilterableShowList(header.title,rerender,true);
+  renderFilterableShowList(header.title,rerender,true);
+  if(missingCount>0){
+    const note=document.createElement("div");note.className="msg";note.style.cssText="font-size:10px;opacity:0.6;padding:8px 16px";
+    note.textContent=`${missingCount} show${missingCount===1?"":"s"} listed in setlist data had no matching recording found.`;
+    mainEl.appendChild(note);
+  }
+}
+
+// ── VENUE / TOUR / SEGUE-PAIR DRILL-DOWNS ──
+function showVenueShows(venueEntry){
+  const loc=[venueEntry.city,venueEntry.state||venueEntry.country].filter(Boolean).join(", ");
+  showDrillDownShows(
+    venueEntry.dates,
+    [{label:"Venues",onclick:()=>{browseFacet="venue";showYearGrid();}},{label:venueEntry.venue}],
+    ()=>{browseFacet="venue";showYearGrid();},
+    {title:venueEntry.venue,sub:loc}
+  );
+}
+function showTourShows(tourEntry){
+  showDrillDownShows(
+    tourEntry.dates,
+    [{label:"Tours",onclick:()=>{browseFacet="tour";showYearGrid();}},{label:tourEntry.name}],
+    ()=>{browseFacet="tour";showYearGrid();},
+    {title:tourEntry.name,sub:`${tourEntry.dates.length} shows`}
+  );
+}
+function showSegueShows(pairEntry,backFn,crumbBase){
+  const label=`${pairEntry.a} \u2192 ${pairEntry.b}`;
+  showDrillDownShows(
+    pairEntry.dates,
+    [...crumbBase,{label}],
+    backFn,
+    {title:label,sub:`${pairEntry.count} time${pairEntry.count===1?"":"s"}`}
+  );
+}
+function showSongPerformances(songEntry){
+  showDrillDownShows(
+    songEntry.dates,
+    [{label:"Songs",onclick:()=>{browseFacet="song";showYearGrid();}},{label:songEntry.name}],
+    ()=>showSongDetail(songEntry),
+    {title:songEntry.name,sub:"All performances"}
+  );
+}
+
+function showSongDetail(songEntry){
+  setBreadcrumb([{label:"Songs",onclick:()=>{browseFacet="song";showYearGrid();}},{label:songEntry.name}]);
+  activeShow=null;
+  mainEl.innerHTML="";
+  const frag=document.createDocumentFragment();
+  const back=document.createElement("div");back.className="back-link";back.textContent="\u2190 Back";back.addEventListener("click",()=>{browseFacet="song";showYearGrid();});frag.appendChild(back);
+
+  const jb=songEntry.jerrybase;
+  const perfCount=(jb&&jb.gd_performances)||songEntry.dates.length;
+  const first=(jb&&jb.gd_first_played)||songEntry.dates[0];
+  const last=(jb&&jb.gd_last_played)||songEntry.dates[songEntry.dates.length-1];
+
+  const header=document.createElement("div");header.className="map-detail-header";
+  header.innerHTML=`<h2>${songEntry.name}</h2><div class="map-detail-sub">${perfCount} performance${perfCount===1?"":"s"} \u00b7 ${first?first.slice(0,4):"?"}\u2013${last?last.slice(0,4):"?"}</div>`;
+  frag.appendChild(header);
+
+  if(jb&&(jb.music||jb.lyrics)){
+    const credit=document.createElement("div");credit.className="msg";credit.style.cssText="text-align:left;padding:0 16px 12px;font-size:11px;opacity:0.8";
+    const bits=[];
+    if(jb.music)bits.push(`Music: ${jb.music}`);
+    if(jb.lyrics)bits.push(`Lyrics: ${jb.lyrics}`);
+    credit.textContent=bits.join(" \u00b7 ");
+    frag.appendChild(credit);
+  }
+
+  // Often segues into
+  const segues=segueStartingWith(songEntry.name).slice(0,3);
+  if(segues.length){
+    const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="\u2014 Often segues into \u2014";frag.appendChild(lbl);
+    const list=document.createElement("div");list.className="show-list";
+    segues.forEach(seg=>{
+      const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+      row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">\u2192 ${seg.b}</div><div class="show-location">${seg.count} time${seg.count===1?"":"s"}</div></div><div class="show-arrow">\u203a</div>`;
+      row.addEventListener("click",()=>showSegueShows(seg,()=>showSongDetail(songEntry),[{label:"Songs",onclick:()=>{browseFacet="song";showYearGrid();}},{label:songEntry.name}]));
+      list.appendChild(row);
+    });
+    frag.appendChild(list);
+  }
+
+  // Top heady versions
+  const headyKey=normalizeSongTitle(songEntry.name);
+  const headyEntry=HEADY_SONGS_NORM[headyKey];
+  if(headyEntry&&headyEntry.versions&&headyEntry.versions.length){
+    const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="\u2014 Top Heady Versions \u2014";frag.appendChild(lbl);
+    const list=document.createElement("div");list.className="show-list";
+    headyEntry.versions.slice(0,5).forEach((v,i)=>{
+      const gdshow=getGDShow(v.date);
+      const venue=v.venue||(gdshow&&gdshow.venue)||"Unknown Venue";
+      const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+      row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">\ud83d\udd25 #${i+1} \u00b7 ${v.date||"?"}</div><div class="show-location">${venue}</div></div><div class="show-arrow">\u203a</div>`;
+      if(v.date)row.addEventListener("click",()=>loadShowByDate(v.date,venue,""));
+      list.appendChild(row);
+    });
+    frag.appendChild(list);
+  }
+
+  const browseBtn=document.createElement("button");browseBtn.type="button";browseBtn.className="game-entry-card";
+  browseBtn.innerHTML=`<div class="game-entry-title">Browse All ${songEntry.dates.length} Performances \u2192</div><div class="game-entry-sub">Every night this song was played</div>`;
+  browseBtn.addEventListener("click",()=>showSongPerformances(songEntry));
+  frag.appendChild(browseBtn);
 
   mainEl.appendChild(frag);
 }
@@ -3520,6 +3834,7 @@ async function init(){
     Object.assign(SETLISTS,data.setlists||{});
     Object.assign(GDSHOWS,data.gdshowsdb||{});
     Object.assign(JERRYBASE_SONGS,data.jerrybase_songs||{});
+    buildNavIndexes();
 
   }catch(e){console.warn("dead_data.json not loaded:",e);}
 
