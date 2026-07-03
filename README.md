@@ -1,23 +1,46 @@
-Project: Grateful Dead archive web app
-Building a single-file HTML app (dead-archive.html) styled like a vintage Fillmore/Avalon poster (Playfair Display + IBM Plex Mono, gold/red/cream/black palette) that plays archive.org recordings, paired with a large data file (dead_data.json, ~6-12MB) containing official_releases, heady_songs/heady_lookup, reddit_mentions, setlists, and a ~2000+ show database (gdshowsdb). The HTML fetches ./dead_data.json via relative path — both files must sit side by side (works on GitHub Pages, fails locally via file:// due to CORS — that's expected, not a bug).
-Status of dead-archive.html — all known bugs fixed, no outstanding issues:
+Dead Archive — Project Summary
+I'm building Dead Archive (deadarchives.org), a single-file HTML app (dead-archive.html) + large JSON data file (dead_data.json) hosted on GitHub Pages (repo: iancarlson33/dead-archive). It's a Grateful Dead live-show archive and player styled as a vintage Fillmore/Avalon poster (Playfair Display + IBM Plex Mono, gold/red/cream/black palette).
+Tech stack: Vanilla JS, single HTML file, no framework, no backend. Audio streams live from archive.org. Data is a large pre-built JSON file committed to the repo. Deployed via GitHub Pages with custom domain via Porkbun DNS.
+Data sources:
 
-Landing splash page (CSS, init call, responsive sizing, no longer persisted via sessionStorage) — fixed
-Show info / track list rendering — fixed
-Heady-version badge mismatches — fixed via stricter headyMatch() matching
-Major fix: every show failed to load audio with a misleading "archive.org may be temporarily unavailable" error. Root cause: buildSetlist() never had a return section; statement, so callers tried to appendChild(undefined), crashing right after every successful metadata fetch. Fixed by adding the return statement and removing a redundant internal append call.
-"Dead Archive" header title is now a clickable button that returns to the landing splash page
+gdshowsdb — 2,076 shows with full setlists, venues, cities, set breaks, segues
+jerrybase_songs — 423 GD songs with songwriter credits, performance counts, debut/final dates
+official_releases — 163 releases (Dave's Picks 1–58, Dick's Picks, box sets) with 100% MusicBrainz artwork coverage
+heady_songs / heady_lookup — 375 songs, 3,874 ranked community versions from headyversion.com
+setlists — tour names (from jerrybase CSV exports), venue type (indoor/outdoor), debut/final flags
+reddit_mentions — scraped mention counts per show
 
-Status of dead_data.json:
+Current app features:
 
-Delivered with two rounds of official box-set additions, cross-referenced against the full Wikipedia Grateful Dead discography. Went from 278 → 402 dates with official_releases entries. This includes box sets like In and Out of the Garden, Europe '72: The Complete Recordings (22 shows), Listen to the River, Here Comes Sunshine 1973, Friend of the Devils, Giants Stadium 1987/89/91, June 1976, July 1978, Lyceum '72, May 1977 (both versions), Formerly the Warlocks, and more.
-User is holding off downloading this until the jerrybase merge (below) is also ready, so both can be delivered together in one pass.
+5 nav tabs: Browse (year grid) / Notable / Releases / Favorites+Attended / Map
+Browse by year: Year grid → show list with filter bar (All/Soundboard/Audience/Released), star ratings, source tags, release tags, tour tags, indoor/outdoor tags, debut highlights (gold left border + ✨ badge), quick-play button, favorite (★) and attended (🎫) buttons
+Show page: Banner with all tags → Show Info (collapsible, blue) → Setlist with song metadata, debut/final badges, heady-version badges (collapsible, red) → Tracks with set-break alignment (collapsible, amber, default open) → Reviews from archive.org (collapsible, teal)
+Notable Shows: Curated landmark shows as a card grid, plus a 🎲 Guess the Year game (random clip, 60s playback, type the year, exact-match scoring)
+Releases: Organized by series (Dave's Picks, Dick's Picks, etc.) with numeric-aware sort, cover artwork, multi-show box set picker
+Favorites + Attended: Shared tab with segmented toggle (★ Favorites / 🎫 Attended), both backed by localStorage
+Map by State: US tile-grid cartogram (color-coded by show count), A–Z state list, international section. Tapping a state fetches live archive.org data via exact-date batched OR-queries (50 dates/batch), renders with full filter bar and same row styling as Browse. Year-fetch results cached session-wide to avoid re-fetching.
+Today in Grateful Dead History: Horizontal scroll strip at top of Browse showing all shows matching today's month+day across all years
+Heady version search: Typing a song name in the search bar surfaces that song's ranked community versions instead of a generic archive.org text search
+Media Session API: Lock screen Now Playing shows real SYF artwork, song title, venue, date
+Guess the Year game: Random show → random clip → 60s playback → type the year → exact/close/miss verdict → reveal full date + venue
 
-Outstanding / in progress:
+Known data quality issues:
 
-User has a scrape_jerrybase.py scraper (built earlier) actively running against jerrybase.com (song IDs 1–1400), producing jerrybase_songs.json with song metadata: performance counts, first/last played, songwriter/lyrics/music credits, genres, studio album, tags.
-Important caveat confirmed: jerrybase.com indexes Jerry Garcia's entire performing career (Grateful Dead, Jerry Garcia Band, Legion of Mary, Old & In the Way, New Riders of the Purple Sage, Garcia/Grisman duo, etc.), not just the Dead. The scraper itself was NOT modified to filter by band — user explicitly said to filter at merge time instead, once the scrape is handed back.
-Merge plan once jerrybase_songs.json is delivered: (1) cross-reference every scraped song against gdshowsdb setlists and heady_songs/heady_lookup to confirm actual Grateful Dead performance history; (2) drop/flag JGB-exclusive songs with no Dead history; (3) sanity-check jerrybase's performance-count field against known Dead-only counts before trusting it as Dead-specific (to avoid importing cross-project combined totals as Dead-only stats); (4) merge resulting song metadata into dead_data.json alongside the box-set updates, deliver as one combined file; (5) wire song metadata into the track-view UI to show songwriter/performance-count context (the original motivating use case).
-Resolved side question: jerrybase.com does NOT track per-show Jerry Garcia guitar/equipment data — confirmed via web search, its scope is setlists only. If guitar-per-show data is wanted later, it would need to come from a different source (e.g. jerrygarcia.com/guitars/ or the "Grateful Dead Guide: Jerry Garcia Instrument History" blog), as a separate enrichment task.
+22 heady version entries have corrupted month: 00 dates (rehearsal tapes/studio sessions not in gdshowsdb) — render as "date unconfirmed," non-clickable
+reddit_mentions has some month: 00 date keys (not yet fixed)
+Venue-type (indoor/outdoor) data only covers 1978–1995
 
-Next action: waiting on user to provide jerrybase_songs.json from the completed scrape.
+Working files I maintain between sessions:
+
+/home/claude/dead-archive-test/dead-archive.html — main app
+/home/claude/dead-archive-test/dead_data.json — data file
+Final outputs always go to /mnt/user-data/outputs/
+
+Ongoing / not yet built:
+
+YouTube integration (decided on "search link" approach rather than API)
+Full heady version browse view (search integration done, dedicated browse not yet built)
+Parallelizing state-show loads was addressed with batched exact-date queries instead
+
+
+That should give a new session enough context to pick up right where we are. Let me know when you're ready to start fresh and I'll be there.
