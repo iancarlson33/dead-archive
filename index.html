@@ -2061,7 +2061,16 @@ function attachIndexScrubber(targetEl,sections){
     let idx=Math.floor((clientY-rect.top)/rect.height*sections.length);
     idx=Math.max(0,Math.min(sections.length-1,idx));
     const sec=sections[idx];
-    document.getElementById(sec.elId)?.scrollIntoView({block:"start"});
+    const el=document.getElementById(sec.elId);
+    if(el){
+      // Deliberately not using scrollIntoView() here: its "is this already
+      // in the right spot" heuristic is unreliable against position:sticky
+      // targets on iOS Safari once a header has been pinned to the top --
+      // it silently no-ops on the second+ jump to a different section.
+      // Computing the absolute scroll offset directly sidesteps that.
+      const targetY=el.getBoundingClientRect().top+window.scrollY;
+      window.scrollTo(0,Math.max(0,targetY));
+    }
     bubble.textContent=sec.label;
     bubble.style.display="flex";
     bubble.style.top=Math.max(20,clientY-27)+"px";
