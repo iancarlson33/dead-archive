@@ -247,6 +247,39 @@ body {
   background: transparent; color: var(--gold); cursor: pointer; letter-spacing: 0.5px;
 }
 .song-tag-pill:active { background: var(--gold); color: var(--black); }
+.song-album-art { width: 56px; height: 56px; border-radius: 4px; object-fit: cover; border: 1px solid var(--rule); flex-shrink: 0; }
+.song-album-caption { font-family:'IBM Plex Mono',monospace; font-size: 10px; color: var(--warm); line-height: 1.4; }
+.song-album-caption strong { color: var(--cream); font-family:'Playfair Display',serif; font-size: 13px; font-weight: 700; }
+
+.visual-song-mypick {
+  background: none; border: none; cursor: pointer; font-size: 15px;
+  opacity: 0.25; filter: grayscale(1); align-self: center; padding: 2px 4px; flex-shrink: 0;
+}
+.visual-song-mypick.active { opacity: 1; filter: none; }
+
+.my-versions-list { display:flex; flex-direction:column; gap:6px; padding: 0 16px 16px; }
+.my-version-row {
+  display:flex; align-items:center; gap:10px;
+  background: var(--ink); border:1px solid var(--rule); border-radius:4px;
+  padding: 8px 10px; touch-action: none;
+}
+.my-version-row.dragging { border-color: var(--gold); box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
+.my-version-handle {
+  font-size: 14px; color: var(--warm); cursor: grab; padding: 4px 6px; flex-shrink:0;
+  touch-action: none;
+}
+.my-version-rank {
+  font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; color:var(--gold);
+  flex-shrink:0; width:22px;
+}
+.my-version-info { flex:1; min-width:0; cursor:pointer; }
+.my-version-date { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream); }
+.my-version-venue { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--warm); opacity:0.8; }
+.my-version-remove {
+  background:none; border:none; color:var(--warm); opacity:0.5; cursor:pointer;
+  font-size:13px; padding:4px 6px; flex-shrink:0;
+}
+.my-version-remove:active { opacity:1; color:var(--red); }
 
 
 /* ── BREADCRUMB ── */
@@ -1802,6 +1835,30 @@ let currentTab="years", currentYear=null, sourceFilter="all", favSubView="favori
 let recentShows = JSON.parse(localStorage.getItem("da_recent")||"[]");
 let favorites = JSON.parse(localStorage.getItem("da_favorites")||"[]");
 let attended = JSON.parse(localStorage.getItem("da_attended")||"[]");
+// Personal per-song ranked versions -- your own spin on the community
+// "Heady Versions" feature. Shape: { normalizedSongKey: {name, versions:[{date,venue},...]} }
+// Array ORDER is the rank (index 0 = your #1). Rename this one constant to
+// rebrand the feature without touching anything else.
+const MY_VERSIONS_LABEL = "My Picks";
+let myVersions = JSON.parse(localStorage.getItem("da_my_versions")||"{}");
+function saveMyVersions(){localStorage.setItem("da_my_versions",JSON.stringify(myVersions));}
+function getMyVersionsEntry(songName){return myVersions[normalizeSongTitle(songName)]||null;}
+function isInMyVersions(songName,date){
+  const e=getMyVersionsEntry(songName);
+  return e?e.versions.some(v=>v.date===date):false;
+}
+function toggleMyVersion(songName,date,venue){
+  const key=normalizeSongTitle(songName);
+  if(!myVersions[key])myVersions[key]={name:songName,versions:[]};
+  const idx=myVersions[key].versions.findIndex(v=>v.date===date);
+  if(idx>=0){
+    myVersions[key].versions.splice(idx,1);
+    if(!myVersions[key].versions.length)delete myVersions[key];
+  }else{
+    myVersions[key].versions.push({date,venue});
+  }
+  saveMyVersions();
+}
 
 // ── Favorites ──
 function isFavorite(date){
@@ -2417,14 +2474,40 @@ function showFavoritesView(){
   const toggleWrap=document.createElement("div");toggleWrap.className="seg-toggle";
   const favBtn=document.createElement("button");favBtn.type="button";favBtn.className="seg-toggle-btn"+(favSubView==="favorites"?" active":"");favBtn.textContent=`★ Favorites (${favorites.length})`;
   const attBtn=document.createElement("button");attBtn.type="button";attBtn.className="seg-toggle-btn"+(favSubView==="attended"?" active":"");attBtn.textContent=`🎫 Attended (${attended.length})`;
+  const mineBtn=document.createElement("button");mineBtn.type="button";mineBtn.className="seg-toggle-btn"+(favSubView==="mine"?" active":"");mineBtn.textContent=`🏆 ${MY_VERSIONS_LABEL} (${Object.keys(myVersions).length})`;
   favBtn.addEventListener("click",()=>{favSubView="favorites";showFavoritesView();});
   attBtn.addEventListener("click",()=>{favSubView="attended";showFavoritesView();});
-  toggleWrap.appendChild(favBtn);toggleWrap.appendChild(attBtn);
+  mineBtn.addEventListener("click",()=>{favSubView="mine";showFavoritesView();});
+  toggleWrap.appendChild(favBtn);toggleWrap.appendChild(attBtn);toggleWrap.appendChild(mineBtn);
   mainEl.appendChild(toggleWrap);
 
   const contentEl=document.createElement("div");mainEl.appendChild(contentEl);
   if(favSubView==="attended")showAttended(contentEl);
+  else if(favSubView==="mine")showMyVersionsOverview(contentEl);
   else showFavorites(contentEl);
+}
+
+// Overview of every song with at least one personally-ranked version --
+// the "browse all my picks" surface, living as a third segment here rather
+// than a new tab.
+function showMyVersionsOverview(targetEl){
+  const entries=Object.values(myVersions).filter(e=>e.versions.length).sort((a,b)=>a.name.localeCompare(b.name));
+  if(!entries.length){
+    const msg=document.createElement("div");msg.className="msg";msg.style.cssText="padding:24px 16px;text-align:center;opacity:0.7";
+    msg.textContent=`No ${MY_VERSIONS_LABEL} yet. On any show page, tap \ud83c\udfc6 next to a song in the setlist to start ranking your favorite versions.`;
+    targetEl.appendChild(msg);
+    return;
+  }
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`\u2014 ${entries.length} song${entries.length===1?"":"s"} ranked \u2014`;targetEl.appendChild(lbl);
+  const list=document.createElement("div");list.className="show-list";
+  entries.forEach(e=>{
+    const songEntry=SONG_INDEX[normalizeSongTitle(e.name)];
+    const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
+    row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">${e.name}</div><div class="show-location">${e.versions.length} version${e.versions.length===1?"":"s"} ranked \u00b7 #1: ${e.versions[0].date}</div></div><div class="show-arrow">\u203a</div>`;
+    row.addEventListener("click",()=>{if(songEntry)showSongDetail(songEntry);});
+    list.appendChild(row);
+  });
+  targetEl.appendChild(list);
 }
 
 function showFavorites(targetEl){
@@ -2814,6 +2897,123 @@ function showSongsByTag(tag){
   mainEl.appendChild(frag);
 }
 
+// Studio album cover art, sourced from Apple Music -- same artwork source
+// already used for official_releases. Only a few of the ~29 distinct
+// studio_album values are covered so far; anything missing here falls back
+// to plain text in showSongDetail rather than a broken image.
+const ALBUM_ARTWORK={
+  "Workingman's Dead":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/79/cc/eb/79ccebad-c071-ad53-2aa7-aeef95f8f4bf/603497920983.jpg/500x500bb.jpg",
+  "American Beauty":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/f5/27/20/f5272061-2466-6375-c2d1-f20d14be569f/603497920952.jpg/500x500bb.jpg",
+  "Terrapin Station":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/3a/20/81/3a208150-3b63-98b3-dbeb-6018f4bf3992/603497920815.jpg/500x500bb.jpg",
+};
+
+// Renders the "My Picks" drag-to-reorder section on a Song detail page.
+// Array order in entry.versions IS the rank -- no separate numeric field.
+function renderMyVersionsSection(frag,songEntry){
+  const entry=getMyVersionsEntry(songEntry.name);
+  if(!entry||!entry.versions.length)return;
+
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`\u2014 ${MY_VERSIONS_LABEL} \u2014`;frag.appendChild(lbl);
+  const hint=document.createElement("div");hint.className="map-intro";hint.textContent="Drag \u2630 to reorder your personal ranking.";frag.appendChild(hint);
+
+  const list=document.createElement("div");list.className="my-versions-list";
+  frag.appendChild(list);
+
+  function renderRows(){
+    list.innerHTML="";
+    if(!entry.versions.length){
+      lbl.remove();hint.remove();list.remove();
+      return;
+    }
+    entry.versions.forEach((v,idx)=>{
+      const row=document.createElement("div");row.className="my-version-row";
+
+      const handle=document.createElement("div");handle.className="my-version-handle";handle.textContent="\u2630";
+      row.appendChild(handle);
+
+      const rankEl=document.createElement("div");rankEl.className="my-version-rank";rankEl.textContent="#"+(idx+1);
+      row.appendChild(rankEl);
+
+      const infoEl=document.createElement("div");infoEl.className="my-version-info";
+      infoEl.innerHTML=`<div class="my-version-date">${v.date}</div><div class="my-version-venue">${v.venue||""}</div>`;
+      infoEl.addEventListener("click",()=>loadShowByDate(v.date,v.venue,""));
+      row.appendChild(infoEl);
+
+      const removeBtn=document.createElement("button");removeBtn.type="button";removeBtn.className="my-version-remove";removeBtn.textContent="\u2715";
+      removeBtn.setAttribute("aria-label","Remove from "+MY_VERSIONS_LABEL);
+      removeBtn.addEventListener("click",e=>{
+        e.stopPropagation();
+        toggleMyVersion(songEntry.name,v.date,v.venue);
+        renderRows();
+      });
+      row.appendChild(removeBtn);
+
+      attachDragHandle(handle,row,list,entry,renderRows);
+      list.appendChild(row);
+    });
+  }
+  renderRows();
+}
+
+// Minimal vanilla drag-to-reorder: the dragged row floats via a CSS
+// transform following the pointer; other rows shift by +/- one row-height
+// via transform to open a gap, purely visual. Real DOM/array reordering
+// only happens once, on release -- avoids the fragility of live-swapping
+// DOM nodes mid-drag.
+function attachDragHandle(handle,row,list,entry,rerenderList){
+  let dragging=false,startY=0,originalIndex=0,rowH=0,targetIndex=0;
+
+  function siblingRows(){return Array.from(list.querySelectorAll(".my-version-row"));}
+
+  function start(clientY){
+    dragging=true;startY=clientY;
+    const rows=siblingRows();
+    originalIndex=rows.indexOf(row);
+    targetIndex=originalIndex;
+    rowH=row.getBoundingClientRect().height+6;
+    row.classList.add("dragging");
+    row.style.zIndex="20";
+  }
+  function move(clientY){
+    if(!dragging)return;
+    const deltaY=clientY-startY;
+    row.style.transform=`translateY(${deltaY}px)`;
+    const shift=Math.round(deltaY/rowH);
+    targetIndex=Math.max(0,Math.min(entry.versions.length-1,originalIndex+shift));
+    siblingRows().forEach((sib,i)=>{
+      if(sib===row)return;
+      let sibShift=0;
+      if(targetIndex>originalIndex&&i>originalIndex&&i<=targetIndex)sibShift=-1;
+      else if(targetIndex<originalIndex&&i<originalIndex&&i>=targetIndex)sibShift=1;
+      sib.style.transform=sibShift?`translateY(${sibShift*rowH}px)`:"";
+    });
+  }
+  function end(){
+    if(!dragging)return;
+    dragging=false;
+    row.classList.remove("dragging");row.style.zIndex="";row.style.transform="";
+    siblingRows().forEach(sib=>{sib.style.transform="";});
+    if(targetIndex!==originalIndex){
+      const[item]=entry.versions.splice(originalIndex,1);
+      entry.versions.splice(targetIndex,0,item);
+      saveMyVersions();
+    }
+    rerenderList();
+  }
+
+  handle.addEventListener("touchstart",e=>{start(e.touches[0].clientY);e.preventDefault();},{passive:false});
+  handle.addEventListener("touchmove",e=>{move(e.touches[0].clientY);e.preventDefault();},{passive:false});
+  handle.addEventListener("touchend",end);
+  handle.addEventListener("touchcancel",end);
+  handle.addEventListener("mousedown",e=>{
+    start(e.clientY);
+    const onMove=ev=>move(ev.clientY);
+    const onUp=()=>{end();window.removeEventListener("mousemove",onMove);window.removeEventListener("mouseup",onUp);};
+    window.addEventListener("mousemove",onMove);
+    window.addEventListener("mouseup",onUp);
+  });
+}
+
 function showSongDetail(songEntry){
   setBreadcrumb([{label:"Songs",onclick:()=>{browseFacet="song";showYearGrid();}},{label:songEntry.name}]);
   activeShow=null;
@@ -2840,9 +3040,16 @@ function showSongDetail(songEntry){
     frag.appendChild(credit);
   }
   if(jb&&jb.studio_album){
-    const studio=document.createElement("div");studio.className="msg";studio.style.cssText="text-align:left;padding:0 16px 12px;font-size:11px;opacity:0.8";
-    studio.textContent=`Studio version on: ${jb.studio_album}`;
-    frag.appendChild(studio);
+    const artUrl=ALBUM_ARTWORK[jb.studio_album];
+    if(artUrl){
+      const albumBlock=document.createElement("div");albumBlock.style.cssText="display:flex;align-items:center;gap:10px;padding:0 16px 16px";
+      albumBlock.innerHTML=`<img src="${artUrl}" alt="${jb.studio_album}" class="song-album-art" loading="lazy"><div class="song-album-caption">Studio version on<br><strong>${jb.studio_album}</strong></div>`;
+      frag.appendChild(albumBlock);
+    }else{
+      const studio=document.createElement("div");studio.className="msg";studio.style.cssText="text-align:left;padding:0 16px 12px;font-size:11px;opacity:0.8";
+      studio.textContent=`Studio version on: ${jb.studio_album}`;
+      frag.appendChild(studio);
+    }
   }
   const songTags=getSongTags(jb);
   if(songTags.length){
@@ -2854,6 +3061,8 @@ function showSongDetail(songEntry){
     });
     frag.appendChild(tagRow);
   }
+
+  renderMyVersionsSection(frag,songEntry);
 
   // Often segues into
   const segues=segueStartingWith(songEntry.name).slice(0,3);
@@ -3733,6 +3942,26 @@ function renderVisualSetlist(doc) {
       }
 
       row.appendChild(bodyEl);
+
+      const venueForPick=gdshow.venue||doc.venue||"";
+      const myBtn=document.createElement("button");
+      myBtn.type="button";
+      myBtn.className="visual-song-mypick"+(isInMyVersions(song.name,showDate)?" active":"");
+      myBtn.textContent="\ud83c\udfc6";
+      const setMyBtnState=()=>{
+        const on=isInMyVersions(song.name,showDate);
+        myBtn.classList.toggle("active",on);
+        const label=(on?"Remove from ":"Add to ")+MY_VERSIONS_LABEL;
+        myBtn.title=label;myBtn.setAttribute("aria-label",label);
+      };
+      setMyBtnState();
+      myBtn.addEventListener("click",e=>{
+        e.stopPropagation();
+        toggleMyVersion(song.name,showDate,venueForPick);
+        setMyBtnState();
+      });
+      row.appendChild(myBtn);
+
       block.appendChild(row);
     });
 
@@ -3883,8 +4112,27 @@ function playTrack(idx){
   if(idx<0||idx>=tracks.length)return;
   currentIdx=idx;
   document.querySelectorAll(".track-name").forEach((el,i)=>el.classList.toggle("playing",i===idx));
-  audio.src=tracks[idx].url;audio.load();
-  audio.play().then(()=>{vizPlaying=true;playBtn.textContent="⏸";playBtn.setAttribute("aria-label","Pause");}).catch(()=>{});
+  audio.src=tracks[idx].url;
+  // Deliberately not calling audio.load() here: setting .src already
+  // triggers the browser's resource-selection algorithm, and an explicit
+  // .load() on top of that is implicated in a known iOS Safari quirk where
+  // it can silently invalidate the element's autoplay permission mid-
+  // playlist -- causing .play() to reject right at track boundaries, which
+  // is what "stops instead of advancing to the next song" looks like.
+  const attemptPlay=(isRetry)=>{
+    audio.play().then(()=>{
+      vizPlaying=true;playBtn.textContent="⏸";playBtn.setAttribute("aria-label","Pause");
+    }).catch(err=>{
+      if(!isRetry){
+        // A single immediate retry resolves the above quirk in most cases.
+        setTimeout(()=>attemptPlay(true),150);
+      }else{
+        console.warn("Playback did not resume automatically:",err);
+        vizPlaying=false;playBtn.textContent="\u25b6";playBtn.setAttribute("aria-label","Play");
+      }
+    });
+  };
+  attemptPlay(false);
   playerTrack.textContent=tracks[idx].name;
   playerShow.textContent=(activeShow?.venue||activeShow?.title||"")+" · "+(activeShow?.date||"");
   const rel=getReleases(isoDate(activeShow?.date));
