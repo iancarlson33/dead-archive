@@ -1874,10 +1874,11 @@ function toggleMyVersion(songName,date,venue){
   const idx=myVersions[key].versions.findIndex(v=>v.date===date);
   if(idx>=0){
     myVersions[key].versions.splice(idx,1);
-    if(!myVersions[key].versions.length)delete myVersions[key];
+    if(!myVersions[key].versions.length){delete myVersions[key];saveMyVersions();return;}
   }else{
     myVersions[key].versions.push({date,venue});
   }
+  myVersions[key].updatedAt=Date.now();
   saveMyVersions();
 }
 
@@ -1890,19 +1891,12 @@ function toggleMyVersion(songName,date,venue){
 // not secrecy of this object. Until it's filled in, sync silently disables
 // itself and everything else in the app works exactly as before.
 const FIREBASE_CONFIG={
-  apiKey: "AIzaSyBdZjFhqGcAKmadpwHXbspD5tJNN4lU80M",
-
-  authDomain: "sf-cache-quest.firebaseapp.com",
-
-  projectId: "sf-cache-quest",
-
-  storageBucket: "sf-cache-quest.firebasestorage.app",
-
-  messagingSenderId: "1004445849213",
-
-  appId: "1:1004445849213:web:d0e63ed88f93bb48b50314",
-
-  measurementId: "G-9XJ6H98LPH"
+  apiKey:"YOUR_API_KEY",
+  authDomain:"YOUR_PROJECT.firebaseapp.com",
+  projectId:"YOUR_PROJECT_ID",
+  storageBucket:"YOUR_PROJECT.appspot.com",
+  messagingSenderId:"YOUR_SENDER_ID",
+  appId:"YOUR_APP_ID",
 };
 const SYNC_COLLECTION="dead_archive_sync";
 let syncDb=null;
@@ -1959,13 +1953,30 @@ function mergeSyncData(remote){
   (remote.attended||[]).forEach(r=>{
     if(!attended.some(a=>a.date===r.date))attended.push(r);
   });
-  Object.entries(remote.myVersions||{}).forEach(([key,entry])=>{
-    if(!myVersions[key])myVersions[key]={name:entry.name,versions:[]};
-    entry.versions.forEach(v=>{
-      if(!myVersions[key].versions.some(existing=>existing.date===v.date)){
-        myVersions[key].versions.push(v);
-      }
-    });
+  Object.entries(remote.myVersions||{}).forEach(([key,remoteEntry])=>{
+    const localEntry=myVersions[key];
+    if(!localEntry){
+      // We don't have this song ranked at all yet -- adopt it wholesale.
+      myVersions[key]=remoteEntry;
+      return;
+    }
+    const remoteNewer=(remoteEntry.updatedAt||0)>(localEntry.updatedAt||0);
+    if(remoteNewer){
+      // Remote was edited (added/removed/reordered) more recently, so its
+      // ORDER wins. But if this device added a date the remote doesn't
+      // have yet (e.g. added here after the remote's last sync), fold it
+      // in at the end rather than silently dropping it.
+      const remoteDates=new Set(remoteEntry.versions.map(v=>v.date));
+      const localOnly=localEntry.versions.filter(v=>!remoteDates.has(v.date));
+      myVersions[key]={name:remoteEntry.name,versions:[...remoteEntry.versions,...localOnly],updatedAt:remoteEntry.updatedAt};
+    }else{
+      // Local order is at least as new -- keep it, but fold in anything
+      // that exists only on the remote side (added there since ITS last
+      // sync, before this device's more recent edit).
+      const localDates=new Set(localEntry.versions.map(v=>v.date));
+      const remoteOnly=remoteEntry.versions.filter(v=>!localDates.has(v.date));
+      localEntry.versions.push(...remoteOnly);
+    }
   });
   localStorage.setItem("da_favorites",JSON.stringify(favorites));
   localStorage.setItem("da_attended",JSON.stringify(attended));
@@ -3265,6 +3276,7 @@ function attachDragHandle(handle,row,list,entry,rerenderList){
     if(targetIndex!==originalIndex){
       const[item]=entry.versions.splice(originalIndex,1);
       entry.versions.splice(targetIndex,0,item);
+      entry.updatedAt=Date.now();
       saveMyVersions();
     }
     rerenderList();
