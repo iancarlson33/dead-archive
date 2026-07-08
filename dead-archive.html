@@ -1891,12 +1891,13 @@ function toggleMyVersion(songName,date,venue){
 // not secrecy of this object. Until it's filled in, sync silently disables
 // itself and everything else in the app works exactly as before.
 const FIREBASE_CONFIG={
-  apiKey:"YOUR_API_KEY",
-  authDomain:"YOUR_PROJECT.firebaseapp.com",
-  projectId:"YOUR_PROJECT_ID",
-  storageBucket:"YOUR_PROJECT.appspot.com",
-  messagingSenderId:"YOUR_SENDER_ID",
-  appId:"YOUR_APP_ID",
+  apiKey:"AIzaSyBdZjFhqGcAKmadpwHXbspD5tJNN4lU80M",
+  authDomain:"sf-cache-quest.firebaseapp.com",
+  projectId:"sf-cache-quest",
+  storageBucket:"sf-cache-quest.firebasestorage.app",
+  messagingSenderId:"1004445849213",
+  appId:"1:1004445849213:web:d0e63ed88f93bb48b50314",
+  measurementId:"G-9XJ6H98LPH",
 };
 const SYNC_COLLECTION="dead_archive_sync";
 let syncDb=null;
@@ -2005,12 +2006,14 @@ function syncUnlink(){
   syncCode=null;
   localStorage.removeItem("da_sync_code");
 }
+async function syncPullNow(){
+  if(!syncIsConfigured()||!syncCode)return false;
+  const doc=await syncDb.collection(SYNC_COLLECTION).doc(syncCode).get();
+  if(doc.exists){mergeSyncData(doc.data());return true;}
+  return false;
+}
 async function syncPullOnLoad(){
-  if(!syncIsConfigured()||!syncCode)return;
-  try{
-    const doc=await syncDb.collection(SYNC_COLLECTION).doc(syncCode).get();
-    if(doc.exists)mergeSyncData(doc.data());
-  }catch(e){console.warn("Initial sync pull failed:",e);}
+  try{await syncPullNow();}catch(e){console.warn("Initial sync pull failed:",e);}
 }
 
 function showToast(msg){
@@ -2038,9 +2041,25 @@ function renderSyncModalHome(){
     box.innerHTML=`<div class="modal-title">Sync <button class="modal-close" aria-label="Close">\u2715</button></div>
       <div class="msg" style="padding:8px 0;font-size:12px;opacity:0.85">This device is synced as:</div>
       <div class="sync-code-display">${syncCode}</div>
-      <button class="game-entry-card" id="syncCopyBtn" type="button" style="margin-top:10px">Copy Code</button>
+      <button class="game-entry-card" id="syncNowBtn" type="button" style="margin-top:10px">\ud83d\udd04 Sync Now</button>
+      <button class="game-entry-card" id="syncCopyBtn" type="button" style="margin-top:8px">Copy Code</button>
       <button class="game-entry-card" id="syncUnlinkBtn" type="button" style="margin-top:8px">Unlink This Device</button>`;
     box.querySelector(".modal-close").addEventListener("click",closeSyncModal);
+    box.querySelector("#syncNowBtn").addEventListener("click",async()=>{
+      const btn=box.querySelector("#syncNowBtn");btn.textContent="Syncing\u2026";
+      try{
+        await syncPushNow(); // push anything pending first
+        const pulled=await syncPullNow(); // then pull in whatever the other device has
+        btn.textContent="\ud83d\udd04 Sync Now";
+        showToast(pulled?"Synced!":"Nothing to sync yet");
+        closeSyncModal();
+        if(currentTab==="favorites")showFavoritesView(); // refresh in place so updates show without a reload
+      }catch(e){
+        console.warn("Manual sync failed:",e);
+        btn.textContent="\ud83d\udd04 Sync Now";
+        showToast("Sync failed \u2014 check your connection");
+      }
+    });
     box.querySelector("#syncCopyBtn").addEventListener("click",()=>{
       navigator.clipboard.writeText(syncCode).then(()=>showToast("Code copied")).catch(()=>prompt("Copy this code:",syncCode));
     });
