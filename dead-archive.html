@@ -2564,6 +2564,23 @@ function showNotable(){
     segueGrid.appendChild(card);
   });
   mainEl.appendChild(segueGrid);
+
+  const mentionEntries=Object.entries(REDDIT).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  if(mentionEntries.length){
+    const discussedLbl=document.createElement("div");discussedLbl.className="section-label";discussedLbl.textContent="\u2014 Most Discussed \u2014";mainEl.appendChild(discussedLbl);
+    const discussedIntro=document.createElement("div");discussedIntro.className="map-intro";discussedIntro.textContent="Shows that come up most often in r/gratefuldead, based on how many distinct posts/comments mention that exact date.";mainEl.appendChild(discussedIntro);
+    const discussedGrid=document.createElement("div");discussedGrid.className="notable-grid";
+    mentionEntries.forEach(([date,count])=>{
+      const show=GDSHOWS[date];
+      const venue=show?show.venue:"Unknown Venue";
+      const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
+      const card=document.createElement("button");card.className="notable-card";card.setAttribute("type","button");
+      card.innerHTML=`<div class="notable-date">\ud83d\udcac ${count}\u00d7</div><div class="notable-venue">${date} \u2014 ${venue}</div><div class="notable-why">${loc}</div>`;
+      card.addEventListener("click",()=>loadShowByDate(date,venue,loc));
+      discussedGrid.appendChild(card);
+    });
+    mainEl.appendChild(discussedGrid);
+  }
 }
 
 // ── GUESS THE YEAR GAME ──
@@ -4560,6 +4577,7 @@ async function init(){
     Object.assign(SETLISTS,data.setlists||{});
     Object.assign(GDSHOWS,data.gdshowsdb||{});
     Object.assign(JERRYBASE_SONGS,data.jerrybase_songs||{});
+    Object.assign(REDDIT,data.reddit_mentions||{});
     buildNavIndexes();
 
   }catch(e){console.warn("dead_data.json not loaded:",e);}
