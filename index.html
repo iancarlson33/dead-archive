@@ -2594,9 +2594,9 @@ function showNotable(){
   const segueIntro=document.createElement("div");segueIntro.className="map-intro";segueIntro.textContent="The most-played song transitions in Dead history, ranked by how often they happened. Drums/Space excluded since they'd otherwise dominate the whole list.";mainEl.appendChild(segueIntro);
   const segueGrid=document.createElement("div");segueGrid.className="notable-grid";
   const DRUM_SPACE=new Set(["Drums","Space"]);
-  SEGUE_INDEX.filter(seg=>!DRUM_SPACE.has(seg.a)&&!DRUM_SPACE.has(seg.b)).slice(0,12).forEach(seg=>{
+  SEGUE_INDEX.filter(seg=>!DRUM_SPACE.has(seg.a)&&!DRUM_SPACE.has(seg.b)).slice(0,12).forEach((seg,idx)=>{
     const card=document.createElement("button");card.className="notable-card";card.setAttribute("type","button");
-    card.innerHTML=`<div class="notable-date">${seg.count}\u00d7</div><div class="notable-venue">${seg.a} \u2192 ${seg.b}</div>`;
+    card.innerHTML=`<div class="notable-date">#${idx+1} \u00b7 ${seg.count}\u00d7</div><div class="notable-venue">${seg.a} \u2192 ${seg.b}</div>`;
     card.addEventListener("click",()=>showSegueShows(seg,()=>showNotable(),[{label:"Notable shows",onclick:()=>showNotable()}]));
     segueGrid.appendChild(card);
   });
@@ -2607,12 +2607,12 @@ function showNotable(){
     const discussedLbl=document.createElement("div");discussedLbl.className="section-label";discussedLbl.textContent="\u2014 Most Discussed \u2014";mainEl.appendChild(discussedLbl);
     const discussedIntro=document.createElement("div");discussedIntro.className="map-intro";discussedIntro.textContent="Shows that come up most often in r/gratefuldead, based on how many distinct posts/comments mention that exact date.";mainEl.appendChild(discussedIntro);
     const discussedGrid=document.createElement("div");discussedGrid.className="notable-grid";
-    mentionEntries.forEach(([date,count])=>{
+    mentionEntries.forEach(([date,count],idx)=>{
       const show=getGDShow(date);
       const venue=show?show.venue:"Unknown Venue";
       const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
       const card=document.createElement("button");card.className="notable-card";card.setAttribute("type","button");
-      card.innerHTML=`<div class="notable-date">\ud83d\udcac ${count}\u00d7</div><div class="notable-venue">${date} \u2014 ${venue}</div><div class="notable-why">${loc}</div>`;
+      card.innerHTML=`<div class="notable-date">#${idx+1} \u00b7 \ud83d\udcac ${count}\u00d7</div><div class="notable-venue">${date} \u2014 ${venue}</div><div class="notable-why">${loc}</div>`;
       card.addEventListener("click",()=>loadShowByDate(date,venue,loc));
       discussedGrid.appendChild(card);
     });
@@ -2646,13 +2646,13 @@ function showNotable(){
     mainEl.appendChild(hero);
 
     const playedGrid=document.createElement("div");playedGrid.className="notable-grid";
-    viewEntries.slice(1).forEach(([date,count])=>{
+    viewEntries.slice(1).forEach(([date,count],idx)=>{
       const show=getGDShow(date);
       const venue=show?show.venue:"Unknown Venue";
       const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
       const pct=Math.round((count/heroCount)*100);
       const card=document.createElement("button");card.className="notable-card";card.setAttribute("type","button");
-      card.innerHTML=`<div class="notable-date">\ud83c\udfa7 ${fmtViews(count)}</div><div class="notable-venue">${date} \u2014 ${venue}</div><div class="notable-why">${loc}</div><div class="played-bar-track"><div class="played-bar-fill" style="width:${pct}%"></div></div>`;
+      card.innerHTML=`<div class="notable-date">#${idx+2} \u00b7 \ud83c\udfa7 ${fmtViews(count)}</div><div class="notable-venue">${date} \u2014 ${venue}</div><div class="notable-why">${loc}</div><div class="played-bar-track"><div class="played-bar-fill" style="width:${pct}%"></div></div>`;
       card.addEventListener("click",()=>loadShowByDate(date,venue,loc));
       playedGrid.appendChild(card);
     });
