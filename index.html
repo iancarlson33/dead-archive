@@ -668,6 +668,33 @@ body {
 .notable-venue { font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:var(--cream);line-height:1.2; }
 .notable-why { font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--warm);margin-top:4px; }
 
+.most-played-hero {
+  display: block; width: calc(100% - 32px); margin: 0 16px 16px;
+  background: var(--ink); border: 1px solid var(--gold); border-radius: 4px;
+  padding: 20px 16px; text-align: center; cursor: pointer;
+}
+.most-played-hero:hover { background: var(--brown); }
+.most-played-hero-label {
+  font-family:'IBM Plex Mono',monospace; font-size: 10px; color: var(--gold);
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.most-played-hero-number {
+  font-family:'Playfair Display',serif; font-size: 42px; font-weight: 900;
+  color: var(--cream); line-height: 1.15; margin-top: 6px;
+}
+.most-played-hero-show {
+  font-family:'IBM Plex Mono',monospace; font-size: 12px; color: var(--warm); margin-top: 6px;
+}
+.most-played-hero-stats { display: flex; justify-content: center; gap: 32px; margin-top: 16px; }
+.most-played-hero-stat-num {
+  display: block; font-family:'Playfair Display',serif; font-size: 20px; font-weight: 700; color: var(--gold);
+}
+.most-played-hero-stat-label {
+  display: block; font-family:'IBM Plex Mono',monospace; font-size: 10px; color: var(--warm); margin-top: 2px;
+}
+.played-bar-track { height: 4px; background: var(--rule); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.played-bar-fill { height: 100%; background: var(--gold); }
+
 /* ── RELEASES LIST ── */
 .releases-list { padding:0 16px;background:var(--black); }
 .release-series-header {
@@ -1599,6 +1626,7 @@ const HEADY_SONGS_NORM = {}; // normalizeSongTitle(name) -> {name, id, url, vers
 const SETLISTS  = {};
 const GDSHOWS   = {};
 const REDDIT    = {};
+const ARCHIVE_VIEWS = {};
 const JERRYBASE_SONGS = {};
 const JERRYBASE_NORM = {}; // normalizeSongTitle(name) -> jerrybase song object, for case/spelling-tolerant lookup against gdshowsdb names
 const SONG_INDEX = {};  // normalizeSongTitle(name) -> {name, dates:[...], jerrybase:obj|null}
@@ -1638,7 +1666,16 @@ function isoDate(raw){const m=(raw||"").match(/^(\d{4}-\d{2}-\d{2})/);return m?m
 function getReleases(d){return d?(RELEASES[d]||[]):[]}
 function getHeady(d){return d?(HEADY[d]||[]):[]}
 function getSetlist(d){return d?(SETLISTS[d]||null):null}
-function getGDShow(d){return d?(GDSHOWS[d]||null):null}
+function getGDShow(d){
+  if(!d)return null;
+  if(GDSHOWS[d])return GDSHOWS[d];
+  // Early/late double-shows are stored as "date-0", "date-1", etc. rather
+  // than under the plain date -- fall back to the first matching suffixed
+  // key so callers working from a plain date (archive_views, reddit_mentions)
+  // still resolve correctly instead of silently landing on "Unknown Venue".
+  const suffixed=Object.keys(GDSHOWS).find(k=>k.startsWith(d+"-"));
+  return suffixed?GDSHOWS[suffixed]:null;
+}
 function hasDebut(d){
   const show=getGDShow(d);
   if(!show||!show.sets)return false;
@@ -2571,7 +2608,7 @@ function showNotable(){
     const discussedIntro=document.createElement("div");discussedIntro.className="map-intro";discussedIntro.textContent="Shows that come up most often in r/gratefuldead, based on how many distinct posts/comments mention that exact date.";mainEl.appendChild(discussedIntro);
     const discussedGrid=document.createElement("div");discussedGrid.className="notable-grid";
     mentionEntries.forEach(([date,count])=>{
-      const show=GDSHOWS[date];
+      const show=getGDShow(date);
       const venue=show?show.venue:"Unknown Venue";
       const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
       const card=document.createElement("button");card.className="notable-card";card.setAttribute("type","button");
@@ -2580,6 +2617,46 @@ function showNotable(){
       discussedGrid.appendChild(card);
     });
     mainEl.appendChild(discussedGrid);
+  }
+
+  const viewEntries=Object.entries(ARCHIVE_VIEWS).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  if(viewEntries.length){
+    const playedLbl=document.createElement("div");playedLbl.className="section-label";playedLbl.textContent="\u2014 Most Played \u2014";mainEl.appendChild(playedLbl);
+    const playedIntro=document.createElement("div");playedIntro.className="map-intro";playedIntro.textContent="The most-streamed shows on archive.org, by total all-time plays across every recording of that date.";mainEl.appendChild(playedIntro);
+    const fmtViews=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(0)+"K":String(n);
+
+    const allViewCounts=Object.values(ARCHIVE_VIEWS);
+    const avgViews=allViewCounts.reduce((a,b)=>a+b,0)/allViewCounts.length;
+    const totalViews=allViewCounts.reduce((a,b)=>a+b,0);
+
+    const [heroDate,heroCount]=viewEntries[0];
+    const heroShow=getGDShow(heroDate);
+    const heroVenue=heroShow?heroShow.venue:"Unknown Venue";
+    const heroLoc=heroShow?[heroShow.city,heroShow.state||heroShow.country].filter(Boolean).join(", "):"";
+    const hero=document.createElement("button");hero.type="button";hero.className="most-played-hero";
+    hero.innerHTML=`
+      <div class="most-played-hero-label">Most Played Show of All Time</div>
+      <div class="most-played-hero-number">${fmtViews(heroCount)} plays</div>
+      <div class="most-played-hero-show">${heroDate} \u2014 ${heroVenue}${heroLoc?" \u00b7 "+heroLoc:""}</div>
+      <div class="most-played-hero-stats">
+        <div><span class="most-played-hero-stat-num">${(heroCount/avgViews).toFixed(0)}x</span><span class="most-played-hero-stat-label">the average show</span></div>
+        <div><span class="most-played-hero-stat-num">${((heroCount/totalViews)*100).toFixed(1)}%</span><span class="most-played-hero-stat-label">of all catalog plays</span></div>
+      </div>`;
+    hero.addEventListener("click",()=>loadShowByDate(heroDate,heroVenue,heroLoc));
+    mainEl.appendChild(hero);
+
+    const playedGrid=document.createElement("div");playedGrid.className="notable-grid";
+    viewEntries.slice(1).forEach(([date,count])=>{
+      const show=getGDShow(date);
+      const venue=show?show.venue:"Unknown Venue";
+      const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
+      const pct=Math.round((count/heroCount)*100);
+      const card=document.createElement("button");card.className="notable-card";card.setAttribute("type","button");
+      card.innerHTML=`<div class="notable-date">\ud83c\udfa7 ${fmtViews(count)}</div><div class="notable-venue">${date} \u2014 ${venue}</div><div class="notable-why">${loc}</div><div class="played-bar-track"><div class="played-bar-fill" style="width:${pct}%"></div></div>`;
+      card.addEventListener("click",()=>loadShowByDate(date,venue,loc));
+      playedGrid.appendChild(card);
+    });
+    mainEl.appendChild(playedGrid);
   }
 }
 
@@ -4578,6 +4655,7 @@ async function init(){
     Object.assign(GDSHOWS,data.gdshowsdb||{});
     Object.assign(JERRYBASE_SONGS,data.jerrybase_songs||{});
     Object.assign(REDDIT,data.reddit_mentions||{});
+    Object.assign(ARCHIVE_VIEWS,data.archive_views||{});
     buildNavIndexes();
 
   }catch(e){console.warn("dead_data.json not loaded:",e);}
