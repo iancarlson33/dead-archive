@@ -2619,17 +2619,18 @@ function showNotable(){
     mainEl.appendChild(discussedGrid);
   }
 
-  const viewEntries=Object.entries(ARCHIVE_VIEWS).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const viewEntries=Object.entries(ARCHIVE_VIEWS).sort((a,b)=>b[1].all_time-a[1].all_time).slice(0,12);
   if(viewEntries.length){
     const playedLbl=document.createElement("div");playedLbl.className="section-label";playedLbl.textContent="\u2014 Most Played \u2014";mainEl.appendChild(playedLbl);
     const playedIntro=document.createElement("div");playedIntro.className="map-intro";playedIntro.textContent="The most-streamed shows on archive.org, by total all-time plays across every recording of that date.";mainEl.appendChild(playedIntro);
     const fmtViews=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(0)+"K":String(n);
 
-    const allViewCounts=Object.values(ARCHIVE_VIEWS);
+    const allViewCounts=Object.values(ARCHIVE_VIEWS).map(r=>r.all_time);
     const avgViews=allViewCounts.reduce((a,b)=>a+b,0)/allViewCounts.length;
     const totalViews=allViewCounts.reduce((a,b)=>a+b,0);
 
-    const [heroDate,heroCount]=viewEntries[0];
+    const [heroDate,heroRec]=viewEntries[0];
+    const heroCount=heroRec.all_time;
     const heroShow=getGDShow(heroDate);
     const heroVenue=heroShow?heroShow.venue:"Unknown Venue";
     const heroLoc=heroShow?[heroShow.city,heroShow.state||heroShow.country].filter(Boolean).join(", "):"";
@@ -2646,7 +2647,8 @@ function showNotable(){
     mainEl.appendChild(hero);
 
     const playedGrid=document.createElement("div");playedGrid.className="notable-grid";
-    viewEntries.slice(1).forEach(([date,count],idx)=>{
+    viewEntries.slice(1).forEach(([date,rec],idx)=>{
+      const count=rec.all_time;
       const show=getGDShow(date);
       const venue=show?show.venue:"Unknown Venue";
       const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
@@ -2657,6 +2659,23 @@ function showNotable(){
       playedGrid.appendChild(card);
     });
     mainEl.appendChild(playedGrid);
+  }
+
+  const trendingEntries=Object.entries(ARCHIVE_VIEWS).filter(([,r])=>r.last_30day>0).sort((a,b)=>b[1].last_30day-a[1].last_30day).slice(0,12);
+  if(trendingEntries.length){
+    const trendingLbl=document.createElement("div");trendingLbl.className="section-label";trendingLbl.textContent="\u2014 Trending \u2014";mainEl.appendChild(trendingLbl);
+    const trendingIntro=document.createElement("div");trendingIntro.className="map-intro";trendingIntro.textContent="Getting renewed attention right now, by plays in the last 30 days \u2014 a different list than all-time favorites.";mainEl.appendChild(trendingIntro);
+    const trendingGrid=document.createElement("div");trendingGrid.className="notable-grid";
+    trendingEntries.forEach(([date,rec],idx)=>{
+      const show=getGDShow(date);
+      const venue=show?show.venue:"Unknown Venue";
+      const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
+      const card=document.createElement("button");card.className="notable-card";card.setAttribute("type","button");
+      card.innerHTML=`<div class="notable-date">#${idx+1} \u00b7 \ud83d\udcc8 ${rec.last_30day.toLocaleString()} \u002f 30d</div><div class="notable-venue">${date} \u2014 ${venue}</div><div class="notable-why">${loc}</div>`;
+      card.addEventListener("click",()=>loadShowByDate(date,venue,loc));
+      trendingGrid.appendChild(card);
+    });
+    mainEl.appendChild(trendingGrid);
   }
 }
 
