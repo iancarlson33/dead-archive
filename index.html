@@ -3993,6 +3993,7 @@ function renderProgramHeader(doc,extra,targetEl){
   const src=extra?parseSource(doc.identifier):"";
   const runtime=extra?.runtime||"";
   const sl=getSetlist(isoDate(doc.date));
+  const viewRec=ARCHIVE_VIEWS[isoDate(doc.date)];
 
   const header=document.createElement("div");
   header.className="show-banner";
@@ -4052,6 +4053,7 @@ function renderProgramHeader(doc,extra,targetEl){
   panelHTML+=`<div><div class="meta-label">Runtime</div><div class="meta-value info-runtime">${runtime||"—"}</div></div>`;
   panelHTML+=`<div><div class="meta-label">Source</div><div class="meta-value hi info-source">${src?sourceLabel(src):"—"}</div></div>`;
   panelHTML+=`<div><div class="meta-label">Archive</div><div class="meta-value"><a href="https://archive.org/details/${doc.identifier||""}" target="_blank" rel="noopener">View →</a></div></div>`;
+  if(viewRec){panelHTML+=`<div><div class="meta-label">All-Time Plays</div><div class="meta-value">${viewRec.all_time.toLocaleString()}</div></div>`;}
   panelHTML+=`</div>`;
 
   if(releases.length){
