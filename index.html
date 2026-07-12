@@ -1665,6 +1665,7 @@ function isoDate(raw){const m=(raw||"").match(/^(\d{4}-\d{2}-\d{2})/);return m?m
 function getReleases(d){return d?(RELEASES[d]||[]):[]}
 function getHeady(d){return d?(HEADY[d]||[]):[]}
 function getSetlist(d){return d?(SETLISTS[d]||null):null}
+function fmtViews(n){return n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(0)+"K":String(n);}
 function getGDShow(d){
   if(!d)return null;
   if(GDSHOWS[d])return GDSHOWS[d];
@@ -2607,7 +2608,6 @@ function showNotable(){
   if(viewEntries.length){
     const playedLbl=document.createElement("div");playedLbl.className="section-label";playedLbl.textContent="\u2014 Most Played \u2014";mainEl.appendChild(playedLbl);
     const playedIntro=document.createElement("div");playedIntro.className="map-intro";playedIntro.textContent="The most-streamed shows on archive.org, by total all-time plays across every recording of that date.";mainEl.appendChild(playedIntro);
-    const fmtViews=n=>n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(0)+"K":String(n);
 
     const allViewCounts=Object.values(ARCHIVE_VIEWS).map(r=>r.all_time);
     const avgViews=allViewCounts.reduce((a,b)=>a+b,0)/allViewCounts.length;
@@ -2911,7 +2911,7 @@ function showFavorites(targetEl){
 
     const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
     const dateCol=document.createElement("div");dateCol.className="show-date-col";
-    dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}</div>`;
+    dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br>${parts[0]||""}</div>`;
     const infoCol=document.createElement("div");infoCol.className="show-info-col";
     const venueEl=document.createElement("div");venueEl.className="show-venue-name";venueEl.textContent=venue;
     const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=location;
@@ -3608,7 +3608,7 @@ function showReleaseShows(rel,relDates){
 
     const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
     const dateCol=document.createElement("div");dateCol.className="show-date-col";
-    dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}</div>`;
+    dateCol.innerHTML=`<div class="show-day-num">${day}</div><div class="show-month-label">${month}<br>${date.slice(0,4)}</div>`;
     const infoCol=document.createElement("div");infoCol.className="show-info-col";
     const venueEl=document.createElement("div");venueEl.className="show-venue-name";venueEl.textContent=venue;
     const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=location;
@@ -3709,7 +3709,7 @@ function renderFilterableShowList(labelSuffix,rerenderFn,showYear){
     const day=parts[2]?parseInt(parts[2]):"?";
     const month=(parts[1]&&parseInt(parts[1])>=1&&parseInt(parts[1])<=12)?MS[parseInt(parts[1])-1]:"?";
     const venue=doc.venue||doc.title||"Unknown Venue";
-    const stars=doc.avg_rating?Math.round(parseFloat(doc.avg_rating)):0;
+    const viewRec=ARCHIVE_VIEWS[isoDate(doc.date)];
     const releases=getReleases(isoDate(doc.date));
     const src=parseSource(doc.identifier);
     const reddit=getReddit(isoDate(doc.date));
@@ -3727,7 +3727,7 @@ function renderFilterableShowList(labelSuffix,rerenderFn,showYear){
     if(debut){const d=document.createElement("span");d.className="show-debut-badge";d.textContent="✨ DEBUT";d.title="This show includes a song debut";venueEl.appendChild(d);}
     const locEl=document.createElement("div");locEl.className="show-location";locEl.textContent=doc.coverage||"";
     const tags=document.createElement("div");tags.className="show-tags";
-    if(stars){const t=document.createElement("span");t.className="tag tag-stars";t.textContent="★".repeat(Math.min(5,stars));tags.appendChild(t);}
+    if(viewRec){const t=document.createElement("span");t.className="tag tag-stars";t.textContent="\ud83c\udfa7 "+fmtViews(viewRec.all_time);t.title=viewRec.all_time.toLocaleString()+" all-time plays";tags.appendChild(t);}
     if(src==="sbd"){const t=document.createElement("span");t.className="tag tag-sbd";t.textContent="SBD";tags.appendChild(t);}
     releases.forEach(rel=>{const t=document.createElement("span");t.className="tag tag-release";t.textContent=rel.title;tags.appendChild(t);});
     if(sl&&sl.tour){const t=document.createElement("span");t.className="tag tag-tour";t.textContent=sl.tour;tags.appendChild(t);}
