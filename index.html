@@ -267,6 +267,24 @@ body {
 .song-timeline-track { flex:1; position:relative; height:8px; background:var(--ink); border-radius:2px; }
 .song-timeline-bar { position:absolute; top:0; height:100%; background:var(--gold); border-radius:2px; min-width:3px; }
 .song-timeline-years { font-family:'IBM Plex Mono',monospace; font-size:8px; color:var(--warm); width:56px; flex-shrink:0; text-align:right; }
+.tour-summary-panel {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(80px,1fr)); gap:1px;
+  background:var(--rule); margin:0 16px 12px; border:1px solid var(--rule); border-radius:4px; overflow:hidden;
+}
+.tour-summary-stat { background:var(--ink); padding:12px 8px; text-align:center; }
+.tour-summary-num { font-family:'Playfair Display',serif; font-size:22px; font-weight:900; color:var(--gold); line-height:1.1; }
+.tour-summary-label { font-family:'IBM Plex Mono',monospace; font-size:8px; color:var(--warm); letter-spacing:1px; text-transform:uppercase; margin-top:2px; }
+.tour-summary-detail {
+  margin:0 16px 16px; padding:10px 12px; background:var(--ink); border:1px solid var(--rule); border-radius:4px;
+  font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--warm); line-height:1.6;
+}
+.tour-summary-detail strong { color:var(--cream); }
+.tour-map-wrap { padding:0 16px 4px; }
+.tour-map-svg { width:100%; height:auto; background:var(--black); border:1px solid var(--rule); border-radius:4px; }
+.tour-map-path { fill:none; stroke:var(--gold); stroke-width:1.5; stroke-dasharray:4,3; opacity:0.7; }
+.tour-map-dot { fill:var(--red); stroke:var(--cream); stroke-width:1.5; }
+.tour-map-num { font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:700; fill:var(--gold); }
+.tour-map-label { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:var(--warm); }
 
 .visual-song-mypick {
   background: none; border: none; cursor: pointer; font-size: 15px;
@@ -1643,6 +1661,7 @@ const SETLISTS  = {};
 const GDSHOWS   = {};
 const REDDIT    = {};
 const ARCHIVE_VIEWS = {};
+const CITY_COORDS = {};
 const JERRYBASE_SONGS = {};
 const JERRYBASE_NORM = {}; // normalizeSongTitle(name) -> jerrybase song object, for case/spelling-tolerant lookup against gdshowsdb names
 const SONG_INDEX = {};  // normalizeSongTitle(name) -> {name, dates:[...], jerrybase:obj|null}
@@ -3221,7 +3240,7 @@ async function fetchRecordingsForDates(dateList){
 // Renders the standard "loading → filterable show list" flow used by Venue,
 // Tour, and Segue-pair drill-downs. crumbParts is the setBreadcrumb() array;
 // backFn returns to the index list; header is {title, sub} for the detail header.
-async function showDrillDownShows(dateList,crumbParts,backFn,header){
+async function showDrillDownShows(dateList,crumbParts,backFn,header,extraContentFn){
   setBreadcrumb(crumbParts);
   activeShow=null;sourceFilter="all";
   mainEl.innerHTML="";
@@ -3233,6 +3252,7 @@ async function showDrillDownShows(dateList,crumbParts,backFn,header){
   const headerEl=document.createElement("div");headerEl.className="map-detail-header";
   headerEl.innerHTML=`<h2>${header.title}</h2><div class="map-detail-sub">${header.sub?header.sub+" \u00b7 ":""}${sortedDates.length} show${sortedDates.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
   frag.appendChild(headerEl);
+  if(extraContentFn)extraContentFn(frag);
   const loadingEl=document.createElement("div");loadingEl.className="msg";loadingEl.textContent=`Loading ${header.title} recordings\u2026`;frag.appendChild(loadingEl);
   mainEl.appendChild(frag);
 
@@ -3267,8 +3287,106 @@ function showTourShows(tourEntry){
     tourEntry.dates,
     [{label:"Tours",onclick:()=>{browseFacet="tour";showYearGrid();}},{label:tourEntry.name}],
     ()=>{browseFacet="tour";showYearGrid();},
-    {title:tourEntry.name,sub:`${tourEntry.dates.length} shows`}
+    {title:tourEntry.name,sub:`${tourEntry.dates.length} shows`},
+    (frag)=>{renderTourMap(frag,tourEntry);renderTourSummaryPanel(frag,tourEntry);}
   );
+}
+// Plots the tour's real route: consecutive same-city dates collapse into a
+// single numbered stop (multi-night runs), connected by a line in
+// chronological order. Bounding box is computed per-tour from its own
+// stops rather than a fixed US frame, so this works for regional runs,
+// cross-country tours, and international dates alike without distortion
+// from a mismatched fixed scale.
+function renderTourMap(frag,tourEntry){
+  const sortedDates=[...tourEntry.dates].sort();
+  const stops=[];
+  sortedDates.forEach(d=>{
+    const show=getGDShow(d);
+    if(!show||!show.city)return;
+    const key=[show.city,show.state||show.country].filter(Boolean).join(", ");
+    const coords=CITY_COORDS[key];
+    if(!coords)return;
+    const last=stops[stops.length-1];
+    if(last&&last.key===key){last.nights++;last.dates.push(d);}
+    else stops.push({key,city:show.city,lat:coords.lat,lng:coords.lng,nights:1,dates:[d]});
+  });
+  if(stops.length<2)return; // not enough geocoded stops to draw a route
+
+  const lats=stops.map(s=>s.lat),lngs=stops.map(s=>s.lng);
+  const minLat=Math.min(...lats),maxLat=Math.max(...lats);
+  const minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
+  const latPad=(maxLat-minLat)*0.2||2,lngPad=(maxLng-minLng)*0.2||2;
+  const W=400,H=320,PAD=34;
+  function project(lat,lng){
+    const x=PAD+((lng-(minLng-lngPad))/((maxLng+lngPad)-(minLng-lngPad)))*(W-2*PAD);
+    const y=PAD+(1-(lat-(minLat-latPad))/((maxLat+latPad)-(minLat-latPad)))*(H-2*PAD);
+    return{x,y};
+  }
+  const points=stops.map(s=>Object.assign({},s,project(s.lat,s.lng)));
+
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="\u2014 Tour Route \u2014";frag.appendChild(lbl);
+
+  const pathD=points.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+  let svg=`<svg viewBox="0 0 ${W} ${H}" class="tour-map-svg" xmlns="http://www.w3.org/2000/svg">`;
+  svg+=`<path d="${pathD}" class="tour-map-path"/>`;
+  points.forEach((p,i)=>{
+    svg+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" class="tour-map-dot"/>`;
+    svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y-11).toFixed(1)}" class="tour-map-num" text-anchor="middle">${i+1}</text>`;
+    const anchor=p.x<W*0.15?"start":p.x>W*0.85?"end":"middle";
+    svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y+18).toFixed(1)}" class="tour-map-label" text-anchor="${anchor}">${escapeHtml(p.city)}${p.nights>1?" ("+p.nights+"n)":""}</text>`;
+  });
+  svg+="</svg>";
+
+  const mapWrap=document.createElement("div");mapWrap.className="tour-map-wrap";
+  mapWrap.innerHTML=svg;
+  frag.appendChild(mapWrap);
+
+  const placedCount=stops.reduce((sum,s)=>sum+s.nights,0);
+  const skippedCount=tourEntry.dates.length-placedCount;
+  if(skippedCount>0){
+    const note=document.createElement("div");note.className="msg";note.style.cssText="font-size:10px;opacity:0.6;padding:0 16px 12px";
+    note.textContent=`${skippedCount} show${skippedCount===1?"":"s"} couldn't be placed on the map (no coordinates).`;
+    frag.appendChild(note);
+  }
+}
+// Summary stats for a tour: debuts, songs played for the last time ever,
+// total archive.org listens, and heady-ranked versions -- all derived from
+// data already in the app, no new crawling needed.
+function renderTourSummaryPanel(frag,tourEntry){
+  const dates=tourEntry.dates;
+  const debuts=[];
+  const farewells=[];
+  dates.forEach(d=>{
+    const show=getGDShow(d);
+    if(!show)return;
+    (show.sets||[]).forEach(set=>set.songs.forEach(sg=>{
+      if(sg.debut)debuts.push(sg.name);
+      const jbEntry=JERRYBASE_NORM[normalizeSongTitle(sg.name)];
+      if(jbEntry&&jbEntry.gd_last_played===d)farewells.push(sg.name);
+    }));
+  });
+  let totalViews=0;
+  dates.forEach(d=>{const rec=ARCHIVE_VIEWS[d];if(rec)totalViews+=rec.all_time;});
+  let headyCount=0;
+  dates.forEach(d=>{headyCount+=(HEADY[d]||[]).length;});
+
+  if(!debuts.length&&!farewells.length&&!totalViews&&!headyCount)return;
+
+  const panel=document.createElement("div");panel.className="tour-summary-panel";
+  let html="";
+  if(debuts.length)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${debuts.length}</div><div class="tour-summary-label">Debut${debuts.length===1?"":"s"}</div></div>`;
+  if(farewells.length)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${farewells.length}</div><div class="tour-summary-label">Last Time Played</div></div>`;
+  if(totalViews)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${fmtViews(totalViews)}</div><div class="tour-summary-label">Archive Listens</div></div>`;
+  if(headyCount)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${headyCount}</div><div class="tour-summary-label">Heady Version${headyCount===1?"":"s"}</div></div>`;
+  panel.innerHTML=html;
+  frag.appendChild(panel);
+
+  if(debuts.length||farewells.length){
+    const detail=document.createElement("div");detail.className="tour-summary-detail";
+    if(debuts.length){const d=document.createElement("div");d.innerHTML=`<strong>Debuted:</strong> ${debuts.join(", ")}`;detail.appendChild(d);}
+    if(farewells.length){const f=document.createElement("div");f.innerHTML=`<strong>Last played:</strong> ${farewells.join(", ")}`;detail.appendChild(f);}
+    frag.appendChild(detail);
+  }
 }
 function showSegueShows(pairEntry,backFn,crumbBase){
   const label=`${pairEntry.a} \u2192 ${pairEntry.b}`;
@@ -4740,6 +4858,7 @@ async function init(){
     Object.assign(GDSHOWS,data.gdshowsdb||{});
     Object.assign(JERRYBASE_SONGS,data.jerrybase_songs||{});
     Object.assign(REDDIT,data.reddit_mentions||{});
+    Object.assign(CITY_COORDS,data.city_coords||{});
     Object.assign(ARCHIVE_VIEWS,data.archive_views||{});
     buildNavIndexes();
 
