@@ -250,6 +250,23 @@ body {
 .song-album-art { width: 56px; height: 56px; border-radius: 4px; object-fit: cover; border: 1px solid var(--rule); flex-shrink: 0; }
 .song-album-caption { font-family:'IBM Plex Mono',monospace; font-size: 10px; color: var(--warm); line-height: 1.4; }
 .song-album-caption strong { color: var(--cream); font-family:'Playfair Display',serif; font-size: 13px; font-weight: 700; }
+.year-sparkline { display:flex; align-items:flex-end; gap:1px; height:60px; padding:0 16px; margin-top:8px; }
+.year-sparkline-bar { flex:1; background:var(--gold); border-radius:1px 1px 0 0; min-width:2px; }
+.year-sparkline-bar-empty { background:var(--rule); }
+.year-sparkline-labels { display:flex; justify-content:space-between; padding:2px 16px 16px; font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--warm); }
+.song-timeline-list { display:flex; flex-direction:column; }
+.song-timeline-row {
+  display:flex; align-items:center; gap:8px; padding:6px 16px;
+  background:none; border:none; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; text-align:left; width:100%;
+}
+.song-timeline-row:active { background:var(--brown); }
+.song-timeline-name {
+  font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--cream);
+  width:110px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.song-timeline-track { flex:1; position:relative; height:8px; background:var(--ink); border-radius:2px; }
+.song-timeline-bar { position:absolute; top:0; height:100%; background:var(--gold); border-radius:2px; min-width:3px; }
+.song-timeline-years { font-family:'IBM Plex Mono',monospace; font-size:8px; color:var(--warm); width:56px; flex-shrink:0; text-align:right; }
 
 .visual-song-mypick {
   background: none; border: none; cursor: pointer; font-size: 15px;
@@ -2661,6 +2678,8 @@ function showNotable(){
     });
     mainEl.appendChild(trendingGrid);
   }
+
+  renderSongTimeline(mainEl);
 }
 
 // ── GUESS THE YEAR GAME ──
@@ -2899,7 +2918,7 @@ function showFavorites(targetEl){
 
   const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`— ${favorites.length} favorite${favorites.length!==1?"s":""} —`;frag.appendChild(lbl);
 
-  const sorted=[...favorites].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const sorted=[...favorites].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
   const list=document.createElement("div");list.className="show-list";
   sorted.forEach(fav=>{
     const parts=(fav.date||"").split("-");
@@ -3411,6 +3430,65 @@ function attachDragHandle(handle,row,list,entry,rerenderList){
   });
 }
 
+// Compact per-year sparkline showing how often this song was played each
+// year across its active years -- makes career arcs (peak, fade, revival)
+// visible at a glance instead of just a raw performance count.
+function renderSongYearChart(frag,songEntry){
+  const yearCounts={};
+  songEntry.dates.forEach(d=>{const y=d.slice(0,4);yearCounts[y]=(yearCounts[y]||0)+1;});
+  const years=Object.keys(yearCounts).sort();
+  if(years.length<2)return; // not worth charting a song only ever played in one year
+  const firstYear=parseInt(years[0]),lastYear=parseInt(years[years.length-1]);
+  const maxCount=Math.max(...Object.values(yearCounts));
+
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="\u2014 Performances By Year \u2014";frag.appendChild(lbl);
+  const chartWrap=document.createElement("div");chartWrap.className="year-sparkline";
+  for(let y=firstYear;y<=lastYear;y++){
+    const count=yearCounts[String(y)]||0;
+    const bar=document.createElement("div");bar.className="year-sparkline-bar"+(count?"":" year-sparkline-bar-empty");
+    bar.style.height=count?Math.max(6,Math.round((count/maxCount)*100))+"%":"2px";
+    bar.title=y+": "+count+" performance"+(count===1?"":"s");
+    chartWrap.appendChild(bar);
+  }
+  frag.appendChild(chartWrap);
+  const labelsRow=document.createElement("div");labelsRow.className="year-sparkline-labels";
+  labelsRow.innerHTML=`<span>${firstYear}</span><span>${lastYear}</span>`;
+  frag.appendChild(labelsRow);
+}
+
+// Every song's active years (debut through final performance) as a
+// horizontal bar, ordered by debut date -- makes the repertoire's growth
+// and turnover visible at a glance. Limited to songs with 25+ performances
+// so the list stays a readable "history of the repertoire" rather than a
+// wall of one-off covers.
+function renderSongTimeline(targetEl){
+  const TIMELINE_START=1965,TIMELINE_END=1995;
+  const span=TIMELINE_END-TIMELINE_START+1;
+  const candidates=Object.values(SONG_INDEX).map(s=>{
+    const perfCount=(s.jerrybase&&s.jerrybase.gd_performances)||s.dates.length;
+    const first=(s.jerrybase&&s.jerrybase.gd_first_played)||s.dates[0];
+    const last=(s.jerrybase&&s.jerrybase.gd_last_played)||s.dates[s.dates.length-1];
+    return{entry:s,name:s.name,perfCount,firstYear:parseInt(first.slice(0,4)),lastYear:parseInt(last.slice(0,4))};
+  }).filter(c=>c.perfCount>=25).sort((a,b)=>a.firstYear-b.firstYear||a.name.localeCompare(b.name));
+
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent=`\u2014 Song Timeline (${candidates.length} songs, 25+ performances) \u2014`;targetEl.appendChild(lbl);
+  const intro=document.createElement("div");intro.className="map-intro";intro.textContent="Every well-established song's active years, from debut to final performance, ordered by when it entered the repertoire.";targetEl.appendChild(intro);
+
+  const wrap=document.createElement("div");wrap.className="song-timeline-list";
+  candidates.forEach(c=>{
+    const leftPct=((c.firstYear-TIMELINE_START)/span)*100;
+    const widthPct=Math.max(0.8,((c.lastYear-c.firstYear+1)/span)*100);
+    const row=document.createElement("button");row.type="button";row.className="song-timeline-row";
+    row.innerHTML=`
+      <div class="song-timeline-name">${c.name}</div>
+      <div class="song-timeline-track"><div class="song-timeline-bar" style="left:${leftPct}%;width:${widthPct}%"></div></div>
+      <div class="song-timeline-years">${c.firstYear}\u2013${c.lastYear}</div>`;
+    row.addEventListener("click",()=>showSongDetail(c.entry));
+    wrap.appendChild(row);
+  });
+  targetEl.appendChild(wrap);
+}
+
 function showSongDetail(songEntry){
   setBreadcrumb([{label:"Songs",onclick:()=>{browseFacet="song";showYearGrid();}},{label:songEntry.name}]);
   activeShow=null;
@@ -3458,6 +3536,8 @@ function showSongDetail(songEntry){
     });
     frag.appendChild(tagRow);
   }
+
+  renderSongYearChart(frag,songEntry);
 
   renderMyVersionsSection(frag,songEntry);
 
