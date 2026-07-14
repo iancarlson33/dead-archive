@@ -301,6 +301,7 @@ body {
 .tour-map-label { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:var(--warm); }
 .tour-map-travel-dot { fill:var(--cream); stroke:var(--red); stroke-width:1.5; }
 .tour-map-travel-glow { fill:var(--red); opacity:0.3; }
+.tour-map-travel-skull { filter:drop-shadow(0 0 2px rgba(0,0,0,0.7)); }
 
 .visual-song-mypick {
   background: none; border: none; cursor: pointer; font-size: 15px;
@@ -3314,6 +3315,17 @@ function showTourShows(tourEntry){
 // stops rather than a fixed US frame, so this works for regional runs,
 // cross-country tours, and international dates alike without distortion
 // from a mismatched fixed scale.
+// The landing screen's Steal Your Face artwork stays in the DOM (just
+// display:none) once you enter the archive, so the Tour Map's traveling
+// icon can reference the same <image> data URI directly instead of
+// duplicating that (fairly large) base64 payload a second time in the code.
+let _skullDataUri;
+function getSkullDataUri(){
+  if(_skullDataUri!==undefined)return _skullDataUri;
+  const img=document.querySelector(".landing-illustration image");
+  _skullDataUri=img?(img.getAttribute("href")||img.getAttribute("xlink:href")||null):null;
+  return _skullDataUri;
+}
 function renderTourMap(frag,tourEntry){
   const sortedDates=[...tourEntry.dates].sort();
   const stops=[];
@@ -3403,23 +3415,43 @@ function renderTourMap(frag,tourEntry){
     const anchor=p.x<W*0.15?"start":p.x>W*0.85?"end":"middle";
     svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y+18).toFixed(1)}" class="tour-map-label" text-anchor="${anchor}">${escapeHtml(p.city)}${p.nights>1?" ("+p.nights+"n)":""}</text>`;
   });
-  // Traveling dot animated along the actual route path via native SVG
+  // Traveling icon animated along the actual route path via native SVG
   // <animateMotion> -- duration scales with the number of stops so a
   // 3-city run and a 20-city cross-country tour both feel like a
   // consistent pace rather than the same fixed-length loop. Skipped
-  // entirely under prefers-reduced-motion.
+  // entirely under prefers-reduced-motion. Uses the same Steal Your Face
+  // artwork as the landing screen, at a tiny size, as the moving marker;
+  // falls back to a plain dot if that artwork can't be found for any reason.
   const prefersReducedMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let hasTravelDot=false;
   if(!prefersReducedMotion){
     hasTravelDot=true;
     const legCount=Math.max(1,points.length-1);
     const dur=Math.max(4,Math.min(24,legCount*1.7)).toFixed(1);
-    svg+=`<circle r="9" class="tour-map-travel-glow"><animate attributeName="r" values="7;11;7" dur="1.1s" repeatCount="indefinite"/><animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion></circle>`;
-    svg+=`<circle r="3.5" class="tour-map-travel-dot"><animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion></circle>`;
+    const skullUri=getSkullDataUri();
+    const SKULL_R=11; // half-size, in viewBox units -> ~22x22 icon
+    svg+=`<g class="tour-map-travel-group">`;
+    svg+=`<circle r="9" class="tour-map-travel-glow"><animate attributeName="r" values="7;11;7" dur="1.1s" repeatCount="indefinite"/></circle>`;
+    if(skullUri){
+      svg+=`<image href="${skullUri}" xlink:href="${skullUri}" x="${-SKULL_R}" y="${-SKULL_R}" width="${SKULL_R*2}" height="${SKULL_R*2}" class="tour-map-travel-skull"/>`;
+    }else{
+      svg+=`<circle r="3.5" class="tour-map-travel-dot"/>`;
+    }
+    svg+=`<animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion>`;
+    svg+=`</g>`;
   }
   svg+="</svg>";
 
   const mapWrap=document.createElement("div");mapWrap.className="tour-map-wrap";
+  // On mobile the map's CSS width:100% naturally caps out at a comfortable
+  // size because the viewport itself is narrow. On a laptop the same rule
+  // stretches the SVG to the full (much wider) content column, and since
+  // height:auto preserves the aspect ratio, a tall/portrait tour route
+  // balloons in height right along with it -- that's what forces the
+  // scrolling. Cap width to whichever is smaller: a fixed comfortable size,
+  // or whatever width keeps the map's own height within ~68% of the
+  // viewport, using the aspect ratio already computed above.
+  mapWrap.style.cssText=`max-width:min(480px, calc(68vh * ${(W/H).toFixed(3)}));margin:0 auto;`;
   mapWrap.innerHTML=svg;
   frag.appendChild(mapWrap);
   // Some browsers don't reliably auto-start SMIL animations that arrive via
