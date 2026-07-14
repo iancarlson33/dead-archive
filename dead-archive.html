@@ -299,6 +299,8 @@ body {
 .tour-map-dot { fill:var(--red); stroke:var(--cream); stroke-width:1.5; }
 .tour-map-num { font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:700; fill:var(--gold); }
 .tour-map-label { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:var(--warm); }
+.tour-map-travel-dot { fill:var(--gold); stroke:var(--cream); stroke-width:1; opacity:0.95; }
+.tour-map-travel-glow { fill:var(--gold); opacity:0.35; }
 
 .visual-song-mypick {
   background: none; border: none; cursor: pointer; font-size: 15px;
@@ -3389,15 +3391,30 @@ function renderTourMap(frag,tourEntry){
   }
 
   const pathD=points.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
-  let svg=`<svg viewBox="0 0 ${W} ${H}" class="tour-map-svg" xmlns="http://www.w3.org/2000/svg">`;
+  // Unique id per render so multiple tour maps rendered across a session
+  // (back/forward navigation) never collide on the same #id for mpath refs.
+  const routeId=`tour-route-${Math.random().toString(36).slice(2,9)}`;
+  let svg=`<svg viewBox="0 0 ${W} ${H}" class="tour-map-svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`;
   svg+=outlinesSvg;
-  svg+=`<path d="${pathD}" class="tour-map-path"/>`;
+  svg+=`<path id="${routeId}" d="${pathD}" class="tour-map-path"/>`;
   points.forEach((p,i)=>{
     svg+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" class="tour-map-dot"/>`;
     svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y-11).toFixed(1)}" class="tour-map-num" text-anchor="middle">${i+1}</text>`;
     const anchor=p.x<W*0.15?"start":p.x>W*0.85?"end":"middle";
     svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y+18).toFixed(1)}" class="tour-map-label" text-anchor="${anchor}">${escapeHtml(p.city)}${p.nights>1?" ("+p.nights+"n)":""}</text>`;
   });
+  // Traveling dot animated along the actual route path via native SVG
+  // <animateMotion> -- duration scales with the number of stops so a
+  // 3-city run and a 20-city cross-country tour both feel like a
+  // consistent pace rather than the same fixed-length loop. Skipped
+  // entirely under prefers-reduced-motion.
+  const prefersReducedMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(!prefersReducedMotion){
+    const legCount=Math.max(1,points.length-1);
+    const dur=Math.max(4,Math.min(24,legCount*1.7)).toFixed(1);
+    svg+=`<circle r="9" class="tour-map-travel-glow"><animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion></circle>`;
+    svg+=`<circle r="3.5" class="tour-map-travel-dot"><animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion></circle>`;
+  }
   svg+="</svg>";
 
   const mapWrap=document.createElement("div");mapWrap.className="tour-map-wrap";
