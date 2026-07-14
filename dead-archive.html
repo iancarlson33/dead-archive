@@ -3332,9 +3332,24 @@ function renderTourMap(frag,tourEntry){
   const minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
   const latPad=(maxLat-minLat)*0.2||2,lngPad=(maxLng-minLng)*0.2||2;
   const W=400,H=320,PAD=34;
+  // A degree of longitude covers less real-world distance the further
+  // north you are -- correct for that so the map isn't stretched, then use
+  // ONE shared scale for both axes (picking whichever is more constraining)
+  // and center any leftover space evenly, rather than independently
+  // stretching lng-to-width and lat-to-height regardless of the tour's
+  // actual real-world shape.
+  const avgLat=(minLat+maxLat)/2;
+  const cosLat=Math.max(0.15,Math.cos(avgLat*Math.PI/180));
+  const lngSpanDeg=(maxLng+lngPad)-(minLng-lngPad);
+  const latSpanDeg=(maxLat+latPad)-(minLat-latPad);
+  const effLngSpan=lngSpanDeg*cosLat;
+  const availW=W-2*PAD,availH=H-2*PAD;
+  const pxPerUnit=Math.min(availW/effLngSpan,availH/latSpanDeg);
+  const offsetX=(availW-effLngSpan*pxPerUnit)/2;
+  const offsetY=(availH-latSpanDeg*pxPerUnit)/2;
   function project(lat,lng){
-    const x=PAD+((lng-(minLng-lngPad))/((maxLng+lngPad)-(minLng-lngPad)))*(W-2*PAD);
-    const y=PAD+(1-(lat-(minLat-latPad))/((maxLat+latPad)-(minLat-latPad)))*(H-2*PAD);
+    const x=PAD+offsetX+(lng-(minLng-lngPad))*cosLat*pxPerUnit;
+    const y=PAD+offsetY+(latSpanDeg-(lat-(minLat-latPad)))*pxPerUnit;
     return{x,y};
   }
   const points=stops.map(s=>Object.assign({},s,project(s.lat,s.lng)));
