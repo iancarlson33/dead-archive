@@ -299,8 +299,8 @@ body {
 .tour-map-dot { fill:var(--red); stroke:var(--cream); stroke-width:1.5; }
 .tour-map-num { font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:700; fill:var(--gold); }
 .tour-map-label { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:var(--warm); }
-.tour-map-travel-dot { fill:var(--gold); stroke:var(--cream); stroke-width:1; opacity:0.95; }
-.tour-map-travel-glow { fill:var(--gold); opacity:0.35; }
+.tour-map-travel-dot { fill:var(--cream); stroke:var(--red); stroke-width:1.5; }
+.tour-map-travel-glow { fill:var(--red); opacity:0.3; }
 
 .visual-song-mypick {
   background: none; border: none; cursor: pointer; font-size: 15px;
@@ -3409,10 +3409,12 @@ function renderTourMap(frag,tourEntry){
   // consistent pace rather than the same fixed-length loop. Skipped
   // entirely under prefers-reduced-motion.
   const prefersReducedMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let hasTravelDot=false;
   if(!prefersReducedMotion){
+    hasTravelDot=true;
     const legCount=Math.max(1,points.length-1);
     const dur=Math.max(4,Math.min(24,legCount*1.7)).toFixed(1);
-    svg+=`<circle r="9" class="tour-map-travel-glow"><animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion></circle>`;
+    svg+=`<circle r="9" class="tour-map-travel-glow"><animate attributeName="r" values="7;11;7" dur="1.1s" repeatCount="indefinite"/><animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion></circle>`;
     svg+=`<circle r="3.5" class="tour-map-travel-dot"><animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion></circle>`;
   }
   svg+="</svg>";
@@ -3420,6 +3422,17 @@ function renderTourMap(frag,tourEntry){
   const mapWrap=document.createElement("div");mapWrap.className="tour-map-wrap";
   mapWrap.innerHTML=svg;
   frag.appendChild(mapWrap);
+  // Some browsers don't reliably auto-start SMIL animations that arrive via
+  // innerHTML rather than the initial page parse -- force it explicitly
+  // once the fragment (and its <path id> the mpath refs point to) is
+  // actually attached to the document.
+  if(hasTravelDot){
+    requestAnimationFrame(()=>{
+      mapWrap.querySelectorAll("animateMotion,animate").forEach(el=>{
+        if(typeof el.beginElement==="function"){ try{ el.beginElement(); }catch(e){} }
+      });
+    });
+  }
 
   const placedCount=stops.reduce((sum,s)=>sum+s.nights,0);
   const skippedCount=tourEntry.dates.length-placedCount;
