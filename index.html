@@ -3331,25 +3331,38 @@ function renderTourMap(frag,tourEntry){
   const minLat=Math.min(...lats),maxLat=Math.max(...lats);
   const minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
   const latPad=(maxLat-minLat)*0.2||2,lngPad=(maxLng-minLng)*0.2||2;
-  const W=400,H=320,PAD=34;
   // A degree of longitude covers less real-world distance the further
-  // north you are -- correct for that so the map isn't stretched, then use
-  // ONE shared scale for both axes (picking whichever is more constraining)
-  // and center any leftover space evenly, rather than independently
-  // stretching lng-to-width and lat-to-height regardless of the tour's
-  // actual real-world shape.
+  // north you are -- correct for that so the map isn't stretched. Then,
+  // instead of a fixed viewBox size (which leaves letterboxing/dead space
+  // whenever a tour's real shape doesn't match that fixed ratio), size the
+  // viewBox to match the tour's own actual shape, clamping extreme
+  // aspect ratios by growing the shorter axis (adding surrounding
+  // geographic context) rather than distorting the scale.
   const avgLat=(minLat+maxLat)/2;
   const cosLat=Math.max(0.15,Math.cos(avgLat*Math.PI/180));
-  const lngSpanDeg=(maxLng+lngPad)-(minLng-lngPad);
-  const latSpanDeg=(maxLat+latPad)-(minLat-latPad);
-  const effLngSpan=lngSpanDeg*cosLat;
-  const availW=W-2*PAD,availH=H-2*PAD;
-  const pxPerUnit=Math.min(availW/effLngSpan,availH/latSpanDeg);
-  const offsetX=(availW-effLngSpan*pxPerUnit)/2;
-  const offsetY=(availH-latSpanDeg*pxPerUnit)/2;
+  let lngSpanDeg=(maxLng+lngPad)-(minLng-lngPad);
+  let latSpanDeg=(maxLat+latPad)-(minLat-latPad);
+  let effLngSpan=lngSpanDeg*cosLat;
+  const MIN_ASPECT=0.45,MAX_ASPECT=2.2;
+  const aspect=effLngSpan/latSpanDeg;
+  if(aspect>MAX_ASPECT){
+    latSpanDeg=effLngSpan/MAX_ASPECT;
+  }else if(aspect<MIN_ASPECT){
+    effLngSpan=latSpanDeg*MIN_ASPECT;
+    lngSpanDeg=effLngSpan/cosLat;
+  }
+  const PAD=28,MAX_LONG_DIM=440;
+  let contentW,contentH;
+  if(effLngSpan/latSpanDeg>=1){contentW=MAX_LONG_DIM;contentH=MAX_LONG_DIM*(latSpanDeg/effLngSpan);}
+  else{contentH=MAX_LONG_DIM;contentW=MAX_LONG_DIM*(effLngSpan/latSpanDeg);}
+  const W=Math.round(contentW+2*PAD),H=Math.round(contentH+2*PAD);
+  const pxPerUnit=contentW/effLngSpan;
+  // Re-center the (possibly-grown) span on the original data range
+  const viewMinLng=minLng-((lngSpanDeg-(maxLng-minLng))/2);
+  const viewMinLat=minLat-((latSpanDeg-(maxLat-minLat))/2);
   function project(lat,lng){
-    const x=PAD+offsetX+(lng-(minLng-lngPad))*cosLat*pxPerUnit;
-    const y=PAD+offsetY+(latSpanDeg-(lat-(minLat-latPad)))*pxPerUnit;
+    const x=PAD+(lng-viewMinLng)*cosLat*pxPerUnit;
+    const y=PAD+(latSpanDeg-(lat-viewMinLat))*pxPerUnit;
     return{x,y};
   }
   const points=stops.map(s=>Object.assign({},s,project(s.lat,s.lng)));
