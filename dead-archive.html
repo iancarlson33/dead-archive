@@ -294,6 +294,7 @@ body {
 .tour-map-legend-date { color:var(--warm); font-size:9px; margin-left:auto; }
 .tour-map-wrap { padding:0 16px 4px; }
 .tour-map-svg { width:100%; height:auto; background:var(--black); border:1px solid var(--rule); border-radius:4px; }
+.tour-map-state-outline { fill:none; stroke:var(--rule); stroke-width:0.75; }
 .tour-map-path { fill:none; stroke:var(--gold); stroke-width:1.5; stroke-dasharray:4,3; opacity:0.7; }
 .tour-map-dot { fill:var(--red); stroke:var(--cream); stroke-width:1.5; }
 .tour-map-num { font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:700; fill:var(--gold); }
@@ -1675,6 +1676,7 @@ const GDSHOWS   = {};
 const REDDIT    = {};
 const ARCHIVE_VIEWS = {};
 const CITY_COORDS = {}; // "City, ST/Country" -> {lat, lng}, for the Tour Map
+const STATE_OUTLINES = {}; // "State Name" -> [[lng,lat],...] simplified boundary, for the Tour Map background
 const JERRYBASE_SONGS = {};
 const JERRYBASE_NORM = {}; // normalizeSongTitle(name) -> jerrybase song object, for case/spelling-tolerant lookup against gdshowsdb names
 const SONG_INDEX = {};  // normalizeSongTitle(name) -> {name, dates:[...], jerrybase:obj|null}
@@ -3339,8 +3341,28 @@ function renderTourMap(frag,tourEntry){
 
   const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="\u2014 Tour Route \u2014";frag.appendChild(lbl);
 
+  // Only draw state outlines when the tour is within North America -- for
+  // international tours (e.g. the 1981 Europe tour), US state borders would
+  // be irrelevant or nonsensical, so just fall back to the plain
+  // dots-and-route presentation, which already works correctly anywhere.
+  const inNorthAmerica=minLat>=15&&maxLat<=72&&minLng>=-170&&maxLng<=-50;
+  let outlinesSvg="";
+  if(inNorthAmerica){
+    const vMinLng=minLng-lngPad,vMaxLng=maxLng+lngPad,vMinLat=minLat-latPad,vMaxLat=maxLat+latPad;
+    Object.values(STATE_OUTLINES).forEach(ring=>{
+      const rLngs=ring.map(p=>p[0]),rLats=ring.map(p=>p[1]);
+      const rMinLng=Math.min(...rLngs),rMaxLng=Math.max(...rLngs);
+      const rMinLat=Math.min(...rLats),rMaxLat=Math.max(...rLats);
+      // Skip states that don't overlap the current viewport at all
+      if(rMaxLng<vMinLng||rMinLng>vMaxLng||rMaxLat<vMinLat||rMinLat>vMaxLat)return;
+      const d=ring.map((p,i)=>(i===0?"M":"L")+project(p[1],p[0]).x.toFixed(1)+","+project(p[1],p[0]).y.toFixed(1)).join(" ")+"Z";
+      outlinesSvg+=`<path d="${d}" class="tour-map-state-outline"/>`;
+    });
+  }
+
   const pathD=points.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
   let svg=`<svg viewBox="0 0 ${W} ${H}" class="tour-map-svg" xmlns="http://www.w3.org/2000/svg">`;
+  svg+=outlinesSvg;
   svg+=`<path d="${pathD}" class="tour-map-path"/>`;
   points.forEach((p,i)=>{
     svg+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" class="tour-map-dot"/>`;
@@ -4873,7 +4895,7 @@ async function init(){
     Object.assign(JERRYBASE_SONGS,data.jerrybase_songs||{});
     Object.assign(REDDIT,data.reddit_mentions||{});
     Object.assign(CITY_COORDS,data.city_coords||{});
-    Object.assign(CITY_COORDS,data.city_coords||{});
+    Object.assign(STATE_OUTLINES,data.state_outlines||{});
     Object.assign(ARCHIVE_VIEWS,data.archive_views||{});
     buildNavIndexes();
 
