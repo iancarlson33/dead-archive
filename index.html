@@ -299,6 +299,7 @@ body {
 .tour-map-dot { fill:var(--red); stroke:var(--cream); stroke-width:1.5; }
 .tour-map-num { font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:700; fill:var(--gold); }
 .tour-map-label { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:var(--warm); }
+.tour-map-leader { stroke:var(--rule); stroke-width:0.75; opacity:0.6; }
 .tour-map-travel-dot { fill:var(--cream); stroke:var(--red); stroke-width:1.5; }
 .tour-map-travel-glow { fill:var(--red); opacity:0.3; }
 .tour-map-travel-skull { filter:drop-shadow(0 0 2px rgba(0,0,0,0.7)); }
@@ -3357,7 +3358,13 @@ function renderTourMap(frag,tourEntry){
   let lngSpanDeg=(maxLng+lngPad)-(minLng-lngPad);
   let latSpanDeg=(maxLat+latPad)-(minLat-latPad);
   let effLngSpan=lngSpanDeg*cosLat;
-  const MIN_ASPECT=0.45,MAX_ASPECT=2.2;
+  // Most tours land under ~3.5:1 (checked across the full tour list), so
+  // this only reshapes genuine outliers -- e.g. a short coast-to-coast run
+  // with barely any north-south spread -- rather than squeezing the
+  // majority of tours into a near-square box they don't actually need,
+  // which was inflating the vertical span (and the resulting blank space
+  // above/below the route) far more than necessary.
+  const MIN_ASPECT=0.3,MAX_ASPECT=3.5;
   const aspect=effLngSpan/latSpanDeg;
   if(aspect>MAX_ASPECT){
     latSpanDeg=effLngSpan/MAX_ASPECT;
@@ -3412,8 +3419,33 @@ function renderTourMap(frag,tourEntry){
   points.forEach((p,i)=>{
     svg+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" class="tour-map-dot"/>`;
     svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y-11).toFixed(1)}" class="tour-map-num" text-anchor="middle">${i+1}</text>`;
+  });
+  // Label placement pass, separate from the dots/numbers above. Stops that
+  // are geographically close (the Northeast corridor is the classic case --
+  // Boston/NYC/Philly/Passaic can all land within a few pixels of each
+  // other on a map scaled to a whole cross-country tour) would otherwise
+  // render their labels stacked directly on top of one another. Each label
+  // starts at its normal spot just below the dot; if that spot is already
+  // taken by an earlier label, it cascades further down in 13px steps until
+  // it finds clear space, with a thin leader line back to its dot so the
+  // displaced label still reads clearly as belonging to that stop.
+  const placedLabelRects=[];
+  const overlaps=(a,b)=>a.x1<b.x2&&a.x2>b.x1&&a.y1<b.y2&&a.y2>b.y1;
+  points.forEach(p=>{
+    const text=`${p.city}${p.nights>1?" ("+p.nights+"n)":""}`;
+    const w=text.length*5.4;
     const anchor=p.x<W*0.15?"start":p.x>W*0.85?"end":"middle";
-    svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y+18).toFixed(1)}" class="tour-map-label" text-anchor="${anchor}">${escapeHtml(p.city)}${p.nights>1?" ("+p.nights+"n)":""}</text>`;
+    const x1=anchor==="start"?p.x:anchor==="end"?p.x-w:p.x-w/2;
+    const x2=anchor==="start"?p.x+w:anchor==="end"?p.x:p.x+w/2;
+    let offset=18,tries=0,rect={x1,x2,y1:p.y+18-9,y2:p.y+18+3};
+    while(tries<6&&placedLabelRects.some(r=>overlaps(rect,r))){
+      offset+=13;
+      rect={x1,x2,y1:p.y+offset-9,y2:p.y+offset+3};
+      tries++;
+    }
+    placedLabelRects.push(rect);
+    if(offset>18)svg+=`<line x1="${p.x.toFixed(1)}" y1="${(p.y+7).toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${(p.y+offset-8).toFixed(1)}" class="tour-map-leader"/>`;
+    svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y+offset).toFixed(1)}" class="tour-map-label" text-anchor="${anchor}">${escapeHtml(text)}</text>`;
   });
   // Traveling icon animated along the actual route path via native SVG
   // <animateMotion> -- duration scales with the number of stops so a
