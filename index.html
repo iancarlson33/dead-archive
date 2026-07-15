@@ -3345,7 +3345,13 @@ function renderTourMap(frag,tourEntry){
   const lats=stops.map(s=>s.lat),lngs=stops.map(s=>s.lng);
   const minLat=Math.min(...lats),maxLat=Math.max(...lats);
   const minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
-  const latPad=(maxLat-minLat)*0.2||2,lngPad=(maxLng-minLng)*0.2||2;
+  // This padding is on top of the fixed 28px pixel margin below (PAD) --
+  // that fixed margin already reserves room for edge labels, so this
+  // percentage only needs to keep the outermost dots from feeling cramped
+  // against it, not do that job itself. 20% of a tour's full geographic
+  // span balloons into a lot of genuinely empty map for wide-spanning
+  // tours, so this stays modest.
+  const latPad=(maxLat-minLat)*0.12||1.5,lngPad=(maxLng-minLng)*0.12||1.5;
   // A degree of longitude covers less real-world distance the further
   // north you are -- correct for that so the map isn't stretched. Then,
   // instead of a fixed viewBox size (which leaves letterboxing/dead space
@@ -3413,7 +3419,7 @@ function renderTourMap(frag,tourEntry){
   // Unique id per render so multiple tour maps rendered across a session
   // (back/forward navigation) never collide on the same #id for mpath refs.
   const routeId=`tour-route-${Math.random().toString(36).slice(2,9)}`;
-  let svg=`<svg viewBox="0 0 ${W} ${H}" class="tour-map-svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`;
+  let svg="";
   svg+=outlinesSvg;
   svg+=`<path id="${routeId}" d="${pathD}" class="tour-map-path"/>`;
   points.forEach((p,i)=>{
@@ -3472,7 +3478,26 @@ function renderTourMap(frag,tourEntry){
     svg+=`<animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion>`;
     svg+=`</g>`;
   }
-  svg+="</svg>";
+
+  // Rather than pre-computing padding to predict the worst case (which
+  // still clipped a handful of tours -- dense clusters can cascade labels
+  // further than any fixed percentage anticipates), size the viewBox from
+  // what actually got drawn: every dot/label rect, expanded a little to
+  // also cover the travel icon's glow as it passes through. Only ever
+  // grows the box beyond the nominal W x H, never shrinks it.
+  let vbMinX=0,vbMinY=0,vbMaxX=W,vbMaxY=H;
+  const MARGIN=12; // covers the travel icon's glow radius at any point on the route
+  points.forEach(p=>{
+    vbMinX=Math.min(vbMinX,p.x-MARGIN);vbMaxX=Math.max(vbMaxX,p.x+MARGIN);
+    vbMinY=Math.min(vbMinY,p.y-MARGIN-8);vbMaxY=Math.max(vbMaxY,p.y+MARGIN); // -8 extra for the number sitting above the dot
+  });
+  placedLabelRects.forEach(r=>{
+    vbMinX=Math.min(vbMinX,r.x1-2);vbMaxX=Math.max(vbMaxX,r.x2+2);
+    vbMinY=Math.min(vbMinY,r.y1-2);vbMaxY=Math.max(vbMaxY,r.y2+2);
+  });
+  const vbX=Math.floor(vbMinX),vbY=Math.floor(vbMinY);
+  const vbW=Math.ceil(vbMaxX-vbMinX),vbH=Math.ceil(vbMaxY-vbMinY);
+  svg=`<svg viewBox="${vbX} ${vbY} ${vbW} ${vbH}" class="tour-map-svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`+svg+"</svg>";
 
   const mapWrap=document.createElement("div");mapWrap.className="tour-map-wrap";
   // On mobile the map's CSS width:100% naturally caps out at a comfortable
@@ -3482,8 +3507,9 @@ function renderTourMap(frag,tourEntry){
   // balloons in height right along with it -- that's what forces the
   // scrolling. Cap width to whichever is smaller: a fixed comfortable size,
   // or whatever width keeps the map's own height within ~68% of the
-  // viewport, using the aspect ratio already computed above.
-  mapWrap.style.cssText=`max-width:min(480px, calc(68vh * ${(W/H).toFixed(3)}));margin:0 auto;`;
+  // viewport, using the actual (possibly-expanded) viewBox dimensions so
+  // the sizing logic always matches what's really being rendered.
+  mapWrap.style.cssText=`max-width:min(480px, calc(68vh * ${(vbW/vbH).toFixed(3)}));margin:0 auto;`;
   mapWrap.innerHTML=svg;
   frag.appendChild(mapWrap);
   // Some browsers don't reliably auto-start SMIL animations that arrive via
