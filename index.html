@@ -297,10 +297,11 @@ body {
 .postcard-list { display:flex; flex-direction:column; gap:10px; position:relative; }
 .postcard-card {
   display:flex; align-items:stretch; background:var(--ink); border:1px solid var(--rule);
-  border-radius:6px; overflow:hidden; text-align:left; cursor:pointer; width:100%;
+  border-radius:6px; overflow:hidden; text-align:left; width:100%;
   font-family:inherit; padding:0;
 }
-.postcard-card:hover, .postcard-card:focus-visible { border-color:var(--gold); outline:none; }
+.postcard-card.is-link { cursor:pointer; }
+.postcard-card.is-link:hover, .postcard-card.is-link:focus-visible { border-color:var(--gold); outline:none; }
 .postcard-stub {
   flex:0 0 60px; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:4px; padding:10px 4px; position:relative; background:rgba(200,150,10,0.05);
@@ -331,6 +332,17 @@ body {
   font-weight:700; letter-spacing:0.5px; text-transform:uppercase; color:var(--ink);
   background:var(--gold); padding:2px 6px; border-radius:2px;
 }
+/* Each night of a multi-night stand gets its own tappable chip -- a single
+   card used to represent the whole run, which meant every night but the
+   first was invisible and unclickable. */
+.postcard-night-list { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.postcard-night-chip {
+  font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:600; color:var(--cream);
+  background:rgba(200,150,10,0.12); border:1px solid var(--rule); border-radius:3px;
+  padding:4px 8px; cursor:pointer;
+}
+.postcard-night-chip:hover, .postcard-night-chip:focus-visible { border-color:var(--gold); background:rgba(200,150,10,0.22); outline:none; }
+.postcard-night-chip-label { color:var(--warm); margin-right:4px; }
 .postcard-gap {
   text-align:center; font-family:'Playfair Display',serif; font-style:italic; font-size:11px;
   color:var(--warm); opacity:0.85; padding:0 0 0 60px;
@@ -3424,22 +3436,51 @@ function renderTourMap(frag,tourEntry){
 
   const list=document.createElement("div");list.className="postcard-list";
   const MS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const fmtShort=dateStr=>{const[yy,mm,dd]=dateStr.split("-").map(Number);return `${MS[mm-1]} ${dd}`;};
   stops.forEach((s,i)=>{
     const [y,m,dNum]=s.dates[0].split("-").map(Number);
     const lastDate=s.dates[s.dates.length-1];
-    const card=document.createElement("button");card.type="button";card.className="postcard-card";
-    card.setAttribute("aria-label",`${s.venue}, ${s.city} -- view show`);
     const loc=[s.city,s.state].filter(Boolean).join(", ");
+    const multiNight=s.nights>1;
+
+    let dateStub;
+    if(multiNight){
+      const [,m2,d2]=lastDate.split("-").map(Number);
+      dateStub=m2===m?`${MS[m-1]}<br>${dNum}\u2013${d2}`:`${MS[m-1]} ${dNum}\u2013<br>${MS[m2-1]} ${d2}`;
+    }else{
+      dateStub=`${MS[m-1]}<br>${dNum}`;
+    }
+
+    const card=document.createElement("div");card.className="postcard-card";
     card.innerHTML=
       `<div class="postcard-stub"><div class="postcard-badge">${i+1}</div>`+
-      `<div class="postcard-date">${MS[m-1]}<br>${dNum}</div></div>`+
+      `<div class="postcard-date">${dateStub}</div></div>`+
       `<div class="postcard-perf"></div>`+
       `<div class="postcard-main">`+
         `<div class="postcard-venue">${escapeHtml(s.venue||"Unknown Venue")}</div>`+
         `<div class="postcard-city">${escapeHtml(loc)}</div>`+
-        (s.nights>1?`<div class="postcard-nights">${s.nights} nights</div>`:"")+
+        (multiNight?
+          `<div class="postcard-night-list">`+s.dates.map((d,ni)=>
+            `<button type="button" class="postcard-night-chip" data-date="${d}"><span class="postcard-night-chip-label">N${ni+1}</span>${fmtShort(d)}</button>`
+          ).join("")+`</div>`
+          :"")+
       `</div>`;
-    card.addEventListener("click",()=>loadShowByDate(lastDate,s.venue,loc));
+
+    if(multiNight){
+      // Each night of the run gets its own tappable target -- a single
+      // card per stop meant every night but the first was invisible and
+      // unclickable, which is exactly the "which night is this?" confusion
+      // a multi-night run creates.
+      card.querySelectorAll(".postcard-night-chip").forEach(chip=>{
+        chip.addEventListener("click",()=>loadShowByDate(chip.dataset.date,s.venue,loc));
+      });
+    }else{
+      card.classList.add("is-link");
+      card.setAttribute("role","button");card.setAttribute("tabindex","0");
+      card.setAttribute("aria-label",`${s.venue}, ${s.city} -- view show`);
+      card.addEventListener("click",()=>loadShowByDate(lastDate,s.venue,loc));
+      card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();loadShowByDate(lastDate,s.venue,loc);}});
+    }
     list.appendChild(card);
 
     if(i<stops.length-1){
