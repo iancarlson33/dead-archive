@@ -278,31 +278,64 @@ body {
   margin:0 16px 16px; padding:10px 12px; background:var(--ink); border:1px solid var(--rule); border-radius:4px;
   font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--warm); line-height:1.6;
 }
-.tour-summary-detail strong { color:var(--cream); }
-.tour-map-wrap { padding:8px 16px; }
-.tour-map-svg { width:100%; height:auto; display:block; background:var(--ink); border:1px solid var(--rule); border-radius:4px; }
-.tour-map-legend { display:flex; flex-direction:column; gap:2px; padding:0 16px 12px; }
-.tour-map-legend-item {
-  font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--cream);
-  display:flex; align-items:baseline; gap:6px; padding:2px 0;
+/* ── Tour Itinerary: postcard/ticket-stub stack, no literal map ── */
+.postcard-rail { position:relative; margin:4px 16px 8px; }
+/* The connecting thread runs behind every stub badge, like a piece of
+   string joining tour-poster pushpins -- except here it's simply time,
+   not geography, since the stack is already in chronological order. */
+.postcard-thread {
+  position:absolute; left:29px; top:22px; bottom:22px; width:0;
+  border-left:2px dashed rgba(200,150,10,0.45);
 }
-.tour-map-legend-num {
-  display:inline-flex; align-items:center; justify-content:center;
-  width:16px; height:16px; border-radius:50%; background:var(--gold); color:var(--black);
-  font-size:8px; font-weight:700; flex-shrink:0;
+.postcard-travel-icon {
+  position:absolute; left:29px; top:0; width:22px; height:22px; margin-left:-11px;
+  filter:drop-shadow(0 0 3px rgba(0,0,0,0.8));
+  animation-name:postcard-travel; animation-timing-function:linear; animation-iteration-count:infinite;
 }
-.tour-map-legend-date { color:var(--warm); font-size:9px; margin-left:auto; }
-.tour-map-wrap { padding:0 16px 4px; }
-.tour-map-svg { width:100%; height:auto; background:var(--black); border:1px solid var(--rule); border-radius:4px; }
-.tour-map-state-outline { fill:none; stroke:var(--rule); stroke-width:0.75; }
-.tour-map-path { fill:none; stroke:var(--gold); stroke-width:1.5; stroke-dasharray:4,3; opacity:0.7; }
-.tour-map-dot { fill:var(--red); stroke:var(--cream); stroke-width:1.5; }
-.tour-map-num { font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:700; fill:var(--gold); }
-.tour-map-label { font-family:'IBM Plex Mono',monospace; font-size:9px; fill:var(--warm); }
-.tour-map-leader { stroke:var(--rule); stroke-width:0.75; opacity:0.6; }
-.tour-map-travel-dot { fill:var(--cream); stroke:var(--red); stroke-width:1.5; }
-.tour-map-travel-glow { fill:var(--red); opacity:0.3; }
-.tour-map-travel-skull { filter:drop-shadow(0 0 2px rgba(0,0,0,0.7)); }
+@keyframes postcard-travel { 0%{top:22px;} 100%{top:calc(100% - 22px);} }
+@media (prefers-reduced-motion: reduce) { .postcard-travel-icon { display:none; } }
+.postcard-list { display:flex; flex-direction:column; gap:10px; position:relative; }
+.postcard-card {
+  display:flex; align-items:stretch; background:var(--ink); border:1px solid var(--rule);
+  border-radius:6px; overflow:hidden; text-align:left; cursor:pointer; width:100%;
+  font-family:inherit; padding:0;
+}
+.postcard-card:hover, .postcard-card:focus-visible { border-color:var(--gold); outline:none; }
+.postcard-stub {
+  flex:0 0 60px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:4px; padding:10px 4px; position:relative; background:rgba(200,150,10,0.05);
+}
+.postcard-badge {
+  width:26px; height:26px; border-radius:50%; background:var(--red); color:var(--cream);
+  border:2px solid var(--gold); display:flex; align-items:center; justify-content:center;
+  font-family:'Playfair Display',serif; font-weight:900; font-size:12px; flex-shrink:0;
+}
+.postcard-date { font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--warm); text-align:center; line-height:1.3; }
+/* The perforation: a dashed tear-line with two notches cut into the card's
+   own edges, top and bottom, like a ticket stub separated from the main
+   ticket -- the one signature flourish this design is built around. */
+.postcard-perf {
+  flex:0 0 0; width:0; border-left:2px dashed var(--rule); position:relative; margin:10px 0;
+}
+.postcard-perf::before, .postcard-perf::after {
+  content:""; position:absolute; left:-7px; width:14px; height:14px; border-radius:50%;
+  background:var(--black);
+}
+.postcard-perf::before { top:-10px; }
+.postcard-perf::after { bottom:-10px; }
+.postcard-main { flex:1; min-width:0; padding:12px 14px; display:flex; flex-direction:column; gap:2px; }
+.postcard-venue { font-family:'Playfair Display',serif; font-weight:700; font-size:15px; color:var(--cream); line-height:1.25; }
+.postcard-city { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--warm); }
+.postcard-nights {
+  align-self:flex-start; margin-top:4px; font-family:'IBM Plex Mono',monospace; font-size:8px;
+  font-weight:700; letter-spacing:0.5px; text-transform:uppercase; color:var(--ink);
+  background:var(--gold); padding:2px 6px; border-radius:2px;
+}
+.postcard-gap {
+  text-align:center; font-family:'Playfair Display',serif; font-style:italic; font-size:11px;
+  color:var(--warm); opacity:0.85; padding:0 0 0 60px;
+}
+.postcard-note { font-size:10px; opacity:0.6; padding:0 16px 12px; }
 
 .visual-song-mypick {
   background: none; border: none; cursor: pointer; font-size: 15px;
@@ -3335,14 +3368,23 @@ function showTourShows(tourEntry){
     (frag)=>{renderTourMap(frag,tourEntry);renderTourSummaryPanel(frag,tourEntry);}
   );
 }
-// Plots the tour's real route: consecutive same-city dates collapse into a
-// single numbered stop (multi-night runs), connected by a line in
-// chronological order. Bounding box is computed per-tour from its own
-// stops rather than a fixed US frame, so this works for regional runs,
-// cross-country tours, and international dates alike without distortion
-// from a mismatched fixed scale.
+// Plots the tour as a chronological stack of postcard/ticket-stub cards
+// instead of a literal map -- consecutive same-city dates still collapse
+// into a single stop (multi-night runs), but position in the stack is
+// time, not geography. This sidesteps the whole category of problems a
+// real projection brings (aspect ratio, padding, label collisions,
+// international dates) since there's no map to distort in the first place.
+function haversineMiles(lat1,lng1,lat2,lng2){
+  const R=3958.8,toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1),dLng=toRad(lng2-lng1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R*2*Math.asin(Math.sqrt(a));
+}
+function daysBetween(d1,d2){
+  return Math.round((new Date(d2)-new Date(d1))/86400000);
+}
 // The landing screen's Steal Your Face artwork stays in the DOM (just
-// display:none) once you enter the archive, so the Tour Map's traveling
+// display:none) once you enter the archive, so the itinerary's traveling
 // icon can reference the same <image> data URI directly instead of
 // duplicating that (fairly large) base64 payload a second time in the code.
 let _skullDataUri;
@@ -3360,200 +3402,66 @@ function renderTourMap(frag,tourEntry){
     if(!show||!show.city)return;
     const key=[show.city,show.state||show.country].filter(Boolean).join(", ");
     const coords=CITY_COORDS[key];
-    if(!coords)return;
     const last=stops[stops.length-1];
     if(last&&last.key===key){last.nights++;last.dates.push(d);}
-    else stops.push({key,city:show.city,lat:coords.lat,lng:coords.lng,nights:1,dates:[d]});
+    else stops.push({key,city:show.city,state:show.state,venue:show.venue,lat:coords?coords.lat:null,lng:coords?coords.lng:null,nights:1,dates:[d]});
   });
-  if(stops.length<2)return; // not enough geocoded stops to draw a route
+  if(stops.length<2)return; // not enough stops for an itinerary to be meaningful
 
-  const lats=stops.map(s=>s.lat),lngs=stops.map(s=>s.lng);
-  const minLat=Math.min(...lats),maxLat=Math.max(...lats);
-  const minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
-  // This padding is on top of the fixed 28px pixel margin below (PAD) --
-  // that fixed margin already reserves room for edge labels, so this
-  // percentage only needs to keep the outermost dots from feeling cramped
-  // against it, not do that job itself. 20% of a tour's full geographic
-  // span balloons into a lot of genuinely empty map for wide-spanning
-  // tours, so this stays modest.
-  const latPad=(maxLat-minLat)*0.12||1.5,lngPad=(maxLng-minLng)*0.12||1.5;
-  // A degree of longitude covers less real-world distance the further
-  // north you are -- correct for that so the map isn't stretched. Then,
-  // instead of a fixed viewBox size (which leaves letterboxing/dead space
-  // whenever a tour's real shape doesn't match that fixed ratio), size the
-  // viewBox to match the tour's own actual shape, clamping extreme
-  // aspect ratios by growing the shorter axis (adding surrounding
-  // geographic context) rather than distorting the scale.
-  const avgLat=(minLat+maxLat)/2;
-  const cosLat=Math.max(0.15,Math.cos(avgLat*Math.PI/180));
-  let lngSpanDeg=(maxLng+lngPad)-(minLng-lngPad);
-  let latSpanDeg=(maxLat+latPad)-(minLat-latPad);
-  let effLngSpan=lngSpanDeg*cosLat;
-  // Most tours land under ~3.5:1 (checked across the full tour list), so
-  // this only reshapes genuine outliers -- e.g. a short coast-to-coast run
-  // with barely any north-south spread -- rather than squeezing the
-  // majority of tours into a near-square box they don't actually need,
-  // which was inflating the vertical span (and the resulting blank space
-  // above/below the route) far more than necessary.
-  const MIN_ASPECT=0.3,MAX_ASPECT=3.5;
-  const aspect=effLngSpan/latSpanDeg;
-  if(aspect>MAX_ASPECT){
-    latSpanDeg=effLngSpan/MAX_ASPECT;
-  }else if(aspect<MIN_ASPECT){
-    effLngSpan=latSpanDeg*MIN_ASPECT;
-    lngSpanDeg=effLngSpan/cosLat;
-  }
-  const PAD=28,MAX_LONG_DIM=440;
-  let contentW,contentH;
-  if(effLngSpan/latSpanDeg>=1){contentW=MAX_LONG_DIM;contentH=MAX_LONG_DIM*(latSpanDeg/effLngSpan);}
-  else{contentH=MAX_LONG_DIM;contentW=MAX_LONG_DIM*(effLngSpan/latSpanDeg);}
-  const W=Math.round(contentW+2*PAD),H=Math.round(contentH+2*PAD);
-  const pxPerUnit=contentW/effLngSpan;
-  // Re-center the (possibly-grown) span on the original data range
-  const viewMinLng=minLng-((lngSpanDeg-(maxLng-minLng))/2);
-  const viewMinLat=minLat-((latSpanDeg-(maxLat-minLat))/2);
-  function project(lat,lng){
-    const x=PAD+(lng-viewMinLng)*cosLat*pxPerUnit;
-    const y=PAD+(latSpanDeg-(lat-viewMinLat))*pxPerUnit;
-    return{x,y};
-  }
-  const points=stops.map(s=>Object.assign({},s,project(s.lat,s.lng)));
+  const rail=document.createElement("div");rail.className="postcard-rail";
+  const thread=document.createElement("div");thread.className="postcard-thread";rail.appendChild(thread);
 
-  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="\u2014 Tour Route \u2014";frag.appendChild(lbl);
-
-  // Only draw state outlines when the tour is within North America -- for
-  // international tours (e.g. the 1981 Europe tour), US state borders would
-  // be irrelevant or nonsensical, so just fall back to the plain
-  // dots-and-route presentation, which already works correctly anywhere.
-  const inNorthAmerica=minLat>=15&&maxLat<=72&&minLng>=-170&&maxLng<=-50;
-  let outlinesSvg="";
-  if(inNorthAmerica){
-    const vMinLng=minLng-lngPad,vMaxLng=maxLng+lngPad,vMinLat=minLat-latPad,vMaxLat=maxLat+latPad;
-    Object.values(STATE_OUTLINES).forEach(ring=>{
-      const rLngs=ring.map(p=>p[0]),rLats=ring.map(p=>p[1]);
-      const rMinLng=Math.min(...rLngs),rMaxLng=Math.max(...rLngs);
-      const rMinLat=Math.min(...rLats),rMaxLat=Math.max(...rLats);
-      // Skip states that don't overlap the current viewport at all
-      if(rMaxLng<vMinLng||rMinLng>vMaxLng||rMaxLat<vMinLat||rMinLat>vMaxLat)return;
-      const d=ring.map((p,i)=>(i===0?"M":"L")+project(p[1],p[0]).x.toFixed(1)+","+project(p[1],p[0]).y.toFixed(1)).join(" ")+"Z";
-      outlinesSvg+=`<path d="${d}" class="tour-map-state-outline"/>`;
-    });
-  }
-
-  const pathD=points.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
-  // Unique id per render so multiple tour maps rendered across a session
-  // (back/forward navigation) never collide on the same #id for mpath refs.
-  const routeId=`tour-route-${Math.random().toString(36).slice(2,9)}`;
-  let svg="";
-  svg+=outlinesSvg;
-  svg+=`<path id="${routeId}" d="${pathD}" class="tour-map-path"/>`;
-  points.forEach((p,i)=>{
-    svg+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" class="tour-map-dot"/>`;
-    svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y-11).toFixed(1)}" class="tour-map-num" text-anchor="middle">${i+1}</text>`;
-  });
-  // Label placement pass, separate from the dots/numbers above. Stops that
-  // are geographically close (the Northeast corridor is the classic case --
-  // Boston/NYC/Philly/Passaic can all land within a few pixels of each
-  // other on a map scaled to a whole cross-country tour) would otherwise
-  // render their labels stacked directly on top of one another. Each label
-  // starts at its normal spot just below the dot; if that spot is already
-  // taken by an earlier label, it cascades further down in 13px steps until
-  // it finds clear space, with a thin leader line back to its dot so the
-  // displaced label still reads clearly as belonging to that stop.
-  const placedLabelRects=[];
-  const overlaps=(a,b)=>a.x1<b.x2&&a.x2>b.x1&&a.y1<b.y2&&a.y2>b.y1;
-  points.forEach(p=>{
-    const text=`${p.city}${p.nights>1?" ("+p.nights+"n)":""}`;
-    const w=text.length*5.4;
-    const anchor=p.x<W*0.15?"start":p.x>W*0.85?"end":"middle";
-    const x1=anchor==="start"?p.x:anchor==="end"?p.x-w:p.x-w/2;
-    const x2=anchor==="start"?p.x+w:anchor==="end"?p.x:p.x+w/2;
-    let offset=18,tries=0,rect={x1,x2,y1:p.y+18-9,y2:p.y+18+3};
-    while(tries<6&&placedLabelRects.some(r=>overlaps(rect,r))){
-      offset+=13;
-      rect={x1,x2,y1:p.y+offset-9,y2:p.y+offset+3};
-      tries++;
-    }
-    placedLabelRects.push(rect);
-    if(offset>18)svg+=`<line x1="${p.x.toFixed(1)}" y1="${(p.y+7).toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${(p.y+offset-8).toFixed(1)}" class="tour-map-leader"/>`;
-    svg+=`<text x="${p.x.toFixed(1)}" y="${(p.y+offset).toFixed(1)}" class="tour-map-label" text-anchor="${anchor}">${escapeHtml(text)}</text>`;
-  });
-  // Traveling icon animated along the actual route path via native SVG
-  // <animateMotion> -- duration scales with the number of stops so a
-  // 3-city run and a 20-city cross-country tour both feel like a
-  // consistent pace rather than the same fixed-length loop. Skipped
-  // entirely under prefers-reduced-motion. Uses the same Steal Your Face
-  // artwork as the landing screen, at a tiny size, as the moving marker;
-  // falls back to a plain dot if that artwork can't be found for any reason.
+  const skullUri=getSkullDataUri();
   const prefersReducedMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let hasTravelDot=false;
-  if(!prefersReducedMotion){
-    hasTravelDot=true;
-    const legCount=Math.max(1,points.length-1);
-    const dur=Math.max(4,Math.min(24,legCount*1.7)).toFixed(1);
-    const skullUri=getSkullDataUri();
-    const SKULL_R=11; // half-size, in viewBox units -> ~22x22 icon
-    svg+=`<g class="tour-map-travel-group">`;
-    svg+=`<circle r="9" class="tour-map-travel-glow"><animate attributeName="r" values="7;11;7" dur="1.1s" repeatCount="indefinite"/></circle>`;
-    if(skullUri){
-      svg+=`<image href="${skullUri}" xlink:href="${skullUri}" x="${-SKULL_R}" y="${-SKULL_R}" width="${SKULL_R*2}" height="${SKULL_R*2}" class="tour-map-travel-skull"/>`;
-    }else{
-      svg+=`<circle r="3.5" class="tour-map-travel-dot"/>`;
+  if(skullUri&&!prefersReducedMotion){
+    const travelIcon=document.createElement("img");travelIcon.className="postcard-travel-icon";travelIcon.src=skullUri;travelIcon.alt="";
+    const dur=Math.max(6,Math.min(28,stops.length*2.2)).toFixed(1);
+    travelIcon.style.animationDuration=`${dur}s`;
+    rail.appendChild(travelIcon);
+  }
+
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="\u2014 Tour Itinerary \u2014";frag.appendChild(lbl);
+
+  const list=document.createElement("div");list.className="postcard-list";
+  const MS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  stops.forEach((s,i)=>{
+    const [y,m,dNum]=s.dates[0].split("-").map(Number);
+    const lastDate=s.dates[s.dates.length-1];
+    const card=document.createElement("button");card.type="button";card.className="postcard-card";
+    card.setAttribute("aria-label",`${s.venue}, ${s.city} -- view show`);
+    const loc=[s.city,s.state].filter(Boolean).join(", ");
+    card.innerHTML=
+      `<div class="postcard-stub"><div class="postcard-badge">${i+1}</div>`+
+      `<div class="postcard-date">${MS[m-1]}<br>${dNum}</div></div>`+
+      `<div class="postcard-perf"></div>`+
+      `<div class="postcard-main">`+
+        `<div class="postcard-venue">${escapeHtml(s.venue||"Unknown Venue")}</div>`+
+        `<div class="postcard-city">${escapeHtml(loc)}</div>`+
+        (s.nights>1?`<div class="postcard-nights">${s.nights} nights</div>`:"")+
+      `</div>`;
+    card.addEventListener("click",()=>loadShowByDate(lastDate,s.venue,loc));
+    list.appendChild(card);
+
+    if(i<stops.length-1){
+      const next=stops[i+1];
+      const gapDays=daysBetween(lastDate,next.dates[0]);
+      let gapText=gapDays<=1?"the next night":`${gapDays} day${gapDays===1?"":"s"} later`;
+      if(s.lat!=null&&next.lat!=null){
+        const mi=Math.round(haversineMiles(s.lat,s.lng,next.lat,next.lng));
+        gapText=`${mi.toLocaleString()} mi \u00b7 ${gapText}`;
+      }
+      const gap=document.createElement("div");gap.className="postcard-gap";gap.textContent=gapText;
+      list.appendChild(gap);
     }
-    svg+=`<animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${routeId}" xlink:href="#${routeId}"/></animateMotion>`;
-    svg+=`</g>`;
-  }
-
-  // Rather than pre-computing padding to predict the worst case (which
-  // still clipped a handful of tours -- dense clusters can cascade labels
-  // further than any fixed percentage anticipates), size the viewBox from
-  // what actually got drawn: every dot/label rect, expanded a little to
-  // also cover the travel icon's glow as it passes through. Only ever
-  // grows the box beyond the nominal W x H, never shrinks it.
-  let vbMinX=0,vbMinY=0,vbMaxX=W,vbMaxY=H;
-  const MARGIN=12; // covers the travel icon's glow radius at any point on the route
-  points.forEach(p=>{
-    vbMinX=Math.min(vbMinX,p.x-MARGIN);vbMaxX=Math.max(vbMaxX,p.x+MARGIN);
-    vbMinY=Math.min(vbMinY,p.y-MARGIN-8);vbMaxY=Math.max(vbMaxY,p.y+MARGIN); // -8 extra for the number sitting above the dot
   });
-  placedLabelRects.forEach(r=>{
-    vbMinX=Math.min(vbMinX,r.x1-2);vbMaxX=Math.max(vbMaxX,r.x2+2);
-    vbMinY=Math.min(vbMinY,r.y1-2);vbMaxY=Math.max(vbMaxY,r.y2+2);
-  });
-  const vbX=Math.floor(vbMinX),vbY=Math.floor(vbMinY);
-  const vbW=Math.ceil(vbMaxX-vbMinX),vbH=Math.ceil(vbMaxY-vbMinY);
-  svg=`<svg viewBox="${vbX} ${vbY} ${vbW} ${vbH}" class="tour-map-svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`+svg+"</svg>";
-
-  const mapWrap=document.createElement("div");mapWrap.className="tour-map-wrap";
-  // On mobile the map's CSS width:100% naturally caps out at a comfortable
-  // size because the viewport itself is narrow. On a laptop the same rule
-  // stretches the SVG to the full (much wider) content column, and since
-  // height:auto preserves the aspect ratio, a tall/portrait tour route
-  // balloons in height right along with it -- that's what forces the
-  // scrolling. Cap width to whichever is smaller: a fixed comfortable size,
-  // or whatever width keeps the map's own height within ~68% of the
-  // viewport, using the actual (possibly-expanded) viewBox dimensions so
-  // the sizing logic always matches what's really being rendered.
-  mapWrap.style.cssText=`max-width:min(480px, calc(68vh * ${(vbW/vbH).toFixed(3)}));margin:0 auto;`;
-  mapWrap.innerHTML=svg;
-  frag.appendChild(mapWrap);
-  // Some browsers don't reliably auto-start SMIL animations that arrive via
-  // innerHTML rather than the initial page parse -- force it explicitly
-  // once the fragment (and its <path id> the mpath refs point to) is
-  // actually attached to the document.
-  if(hasTravelDot){
-    requestAnimationFrame(()=>{
-      mapWrap.querySelectorAll("animateMotion,animate").forEach(el=>{
-        if(typeof el.beginElement==="function"){ try{ el.beginElement(); }catch(e){} }
-      });
-    });
-  }
+  rail.appendChild(list);
+  frag.appendChild(rail);
 
   const placedCount=stops.reduce((sum,s)=>sum+s.nights,0);
   const skippedCount=tourEntry.dates.length-placedCount;
   if(skippedCount>0){
-    const note=document.createElement("div");note.className="msg";note.style.cssText="font-size:10px;opacity:0.6;padding:0 16px 12px";
-    note.textContent=`${skippedCount} show${skippedCount===1?"":"s"} couldn't be placed on the map (no coordinates).`;
+    const note=document.createElement("div");note.className="msg postcard-note";
+    note.textContent=`${skippedCount} show${skippedCount===1?"":"s"} couldn't be matched to a listed date.`;
     frag.appendChild(note);
   }
 }
