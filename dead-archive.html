@@ -361,6 +361,12 @@ body {
   font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:600; color:var(--gold);
   letter-spacing:0.3px; white-space:nowrap; margin-left:8px; vertical-align:middle;
 }
+.postcard-release-badge {
+  align-self:flex-start; margin-top:4px; font-family:'IBM Plex Mono',monospace; font-size:9px;
+  font-weight:600; color:var(--cream); background:var(--red); padding:2px 7px; border-radius:2px;
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.postcard-night-chip.has-release { border-color:var(--red); color:var(--cream); }
 
 .visual-song-mypick {
   background: none; border: none; cursor: pointer; font-size: 15px;
@@ -3525,6 +3531,12 @@ function renderTourMap(frag,tourEntry){
     const vkey=[s.venue,s.city,s.state||s.country].join("|");
     const venueHistory=VENUE_INDEX[vkey];
     const isVenueDebut=venueHistory&&[...venueHistory.dates].sort()[0]===s.dates[0];
+    // Official releases are tied to one specific date, not the whole
+    // stand -- a 4-night run might have one night on Dave's Picks and the
+    // other three with nothing, so this is checked and shown per-date
+    // rather than as a single badge for the whole stop.
+    const releasesByDate=s.dates.map(d=>({date:d,releases:getReleases(d)}));
+    const singleNightReleases=releasesByDate[0].releases;
     card.innerHTML=
       `<div class="postcard-stub"><div class="postcard-badge">${i+1}</div>`+
       `<div class="postcard-date">${dateStub}</div></div>`+
@@ -3533,9 +3545,12 @@ function renderTourMap(frag,tourEntry){
         (stateOutlineSvg||"")+
         `<div class="postcard-venue">${escapeHtml(s.venue||"Unknown Venue")}${isVenueDebut?'<span class="postcard-debut-badge">\u2726 First time here</span>':""}</div>`+
         `<div class="postcard-city">${escapeHtml(loc)}</div>`+
+        (!multiNight&&singleNightReleases.length?
+          `<div class="postcard-release-badge" title="${escapeHtml(singleNightReleases.map(r=>r.title).join(", "))}">\u266a ${escapeHtml(singleNightReleases[0].title)}</div>`
+          :"")+
         (multiNight?
-          `<div class="postcard-night-list">`+s.dates.map((d,ni)=>
-            `<button type="button" class="postcard-night-chip" data-date="${d}"><span class="postcard-night-chip-label">N${ni+1}</span>${fmtShort(d)}</button>`
+          `<div class="postcard-night-list">`+releasesByDate.map((rd,ni)=>
+            `<button type="button" class="postcard-night-chip${rd.releases.length?' has-release':''}" data-date="${rd.date}"${rd.releases.length?` title="${escapeHtml(rd.releases.map(r=>r.title).join(", "))}"`:""}><span class="postcard-night-chip-label">N${ni+1}</span>${rd.releases.length?"\u266a ":""}${fmtShort(rd.date)}</button>`
           ).join("")+`</div>`
           :"")+
       `</div>`;
