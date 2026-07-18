@@ -366,7 +366,16 @@ body {
   font-weight:600; color:var(--cream); background:var(--red); padding:2px 7px; border-radius:2px;
   max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.postcard-night-chip.has-release { border-color:var(--red); color:var(--cream); }
+.postcard-night-chip.has-release {
+  background:rgba(192,58,26,0.28); border:1.5px solid var(--red); font-weight:700;
+}
+.postcard-night-chip.has-release:hover, .postcard-night-chip.has-release:focus-visible {
+  background:rgba(192,58,26,0.4); border-color:var(--red);
+}
+.postcard-comeback-note {
+  align-self:flex-start; margin-top:4px; font-family:'IBM Plex Mono',monospace; font-size:9px;
+  font-weight:600; color:var(--gold); letter-spacing:0.2px;
+}
 
 .visual-song-mypick {
   background: none; border: none; cursor: pointer; font-size: 15px;
@@ -3456,6 +3465,48 @@ function getStateOutlineSvg(stateAbbr){
   if(!proj)return null;
   return `<svg viewBox="0 0 ${proj.spanLng.toFixed(2)} ${proj.spanLat.toFixed(2)}" preserveAspectRatio="xMidYMid meet" class="postcard-state-outline"><path d="${proj.d}"/></svg>`;
 }
+// Chronological position of every show in GD history (by raw GDSHOWS key,
+// including the "-0"/"-1" suffixes used for same-day early/late shows) --
+// built once and cached, since it's just a sorted key list, but used on
+// every itinerary render to measure "how many shows since this song was
+// last played."
+let _showKeyPositionCache=null;
+function getShowKeyPosition(){
+  if(_showKeyPositionCache)return _showKeyPositionCache;
+  const pos={};
+  Object.keys(GDSHOWS).sort().forEach((k,i)=>{pos[k]=i;});
+  _showKeyPositionCache=pos;
+  return pos;
+}
+const COMEBACK_SONG_THRESHOLD=50;
+const COMEBACK_EXCLUDE=new Set(["Drums","Space","Tuning","Jam"]);
+// The single most notable "long-dormant song returns" moment on a given
+// date, if any -- e.g. Terrapin Station-style revivals, not every song's
+// routine gap between plays. Skips a song's actual debut (no "previous"
+// performance to measure a gap from) since that's a different, already-
+// covered kind of notable.
+function getComebackSongForDate(d){
+  const show=getGDShow(d);
+  if(!show||!show.sets)return null;
+  const pos=getShowKeyPosition();
+  const dPos=pos[d];
+  if(dPos==null)return null;
+  let best=null;
+  show.sets.forEach(set=>(set.songs||[]).forEach(song=>{
+    if(!song.name||/^unidentified/i.test(song.name)||COMEBACK_EXCLUDE.has(song.name))return;
+    const key=normalizeSongTitle(song.name);
+    const entry=SONG_INDEX[key];
+    if(!entry)return;
+    const sortedDates=[...entry.dates].sort();
+    const idx=sortedDates.indexOf(d);
+    if(idx<=0)return; // no previous performance -- that's a debut, not a comeback
+    const prevPos=pos[sortedDates[idx-1]];
+    if(prevPos==null)return;
+    const gap=dPos-prevPos-1;
+    if(gap>=COMEBACK_SONG_THRESHOLD&&(!best||gap>best.gap))best={name:song.name,gap};
+  }));
+  return best;
+}
 function renderTourMap(frag,tourEntry){
   const sortedDates=[...tourEntry.dates].sort();
   const stops=[];
@@ -3537,6 +3588,15 @@ function renderTourMap(frag,tourEntry){
     // rather than as a single badge for the whole stop.
     const releasesByDate=s.dates.map(d=>({date:d,releases:getReleases(d)}));
     const singleNightReleases=releasesByDate[0].releases;
+    // The single most notable "long-dormant song returns" moment across
+    // this stop's nights, if any -- checked per-date since it's tied to one
+    // specific show, then the best one surfaced (there's realistically at
+    // most one truly significant comeback per stop).
+    let bestComeback=null;
+    s.dates.forEach(d=>{
+      const c=getComebackSongForDate(d);
+      if(c&&(!bestComeback||c.gap>bestComeback.gap))bestComeback={...c,date:d};
+    });
     card.innerHTML=
       `<div class="postcard-stub"><div class="postcard-badge">${i+1}</div>`+
       `<div class="postcard-date">${dateStub}</div></div>`+
@@ -3547,6 +3607,9 @@ function renderTourMap(frag,tourEntry){
         `<div class="postcard-city">${escapeHtml(loc)}</div>`+
         (!multiNight&&singleNightReleases.length?
           `<div class="postcard-release-badge" title="${escapeHtml(singleNightReleases.map(r=>r.title).join(", "))}">\u266a ${escapeHtml(singleNightReleases[0].title)}</div>`
+          :"")+
+        (bestComeback?
+          `<div class="postcard-comeback-note">\u2605 ${escapeHtml(bestComeback.name)} \u2014 first time in ${bestComeback.gap} shows${multiNight?` (${fmtShort(bestComeback.date)})`:""}</div>`
           :"")+
         (multiNight?
           `<div class="postcard-night-list">`+releasesByDate.map((rd,ni)=>
