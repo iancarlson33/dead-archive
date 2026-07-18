@@ -324,7 +324,13 @@ body {
 }
 .postcard-perf::before { top:-10px; }
 .postcard-perf::after { bottom:-10px; }
-.postcard-main { flex:1; min-width:0; padding:12px 14px; display:flex; flex-direction:column; gap:2px; }
+.postcard-main { flex:1; min-width:0; padding:12px 14px; display:flex; flex-direction:column; gap:2px; position:relative; z-index:0; overflow:hidden; }
+.postcard-state-outline {
+  position:absolute; top:50%; right:6px; transform:translateY(-50%); z-index:-1;
+  height:76%; width:auto; pointer-events:none;
+}
+.postcard-state-outline path { fill:var(--gold); opacity:0.16; }
+.postcard-state-outline-dot { fill:var(--red); stroke:var(--cream); stroke-width:0.4; opacity:0.9; }
 .postcard-venue { font-family:'Playfair Display',serif; font-weight:700; font-size:15px; color:var(--cream); line-height:1.25; }
 .postcard-city { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--warm); }
 .postcard-nights {
@@ -3406,6 +3412,54 @@ function getSkullDataUri(){
   _skullDataUri=img?(img.getAttribute("href")||img.getAttribute("xlink:href")||null):null;
   return _skullDataUri;
 }
+// A small self-contained projection for a single state's outline, reused
+// as a subtle watermark on each postcard -- same underlying STATE_OUTLINES
+// data the old geographic map used, just normalized to its own tiny
+// viewBox instead of a shared US-wide one. Cached per state (the outline
+// itself is identical for every stop in, say, California), separate from
+// the per-city dot, which differs for every stop and so isn't cached.
+const _stateProjCache={};
+function getStateProjection(stateAbbr){
+  if(_stateProjCache[stateAbbr]!==undefined)return _stateProjCache[stateAbbr];
+  const name=stateAbbr==="DC"?"District of Columbia":STATE_NAMES[stateAbbr];
+  const ring=name&&STATE_OUTLINES[name];
+  if(!ring){_stateProjCache[stateAbbr]=null;return null;}
+  const lngs=ring.map(p=>p[0]),lats=ring.map(p=>p[1]);
+  const minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
+  const minLat=Math.min(...lats),maxLat=Math.max(...lats);
+  const cosLat=Math.max(0.15,Math.cos((minLat+maxLat)/2*Math.PI/180));
+  const spanLng=Math.max(0.01,(maxLng-minLng)*cosLat),spanLat=Math.max(0.01,maxLat-minLat);
+  const d=ring.map((p,i)=>{
+    const x=(p[0]-minLng)*cosLat;
+    const y=spanLat-(p[1]-minLat); // flip: latitude increases north, SVG y increases down
+    return (i===0?"M":"L")+x.toFixed(2)+","+y.toFixed(2);
+  }).join(" ")+"Z";
+  const proj={minLng,minLat,cosLat,spanLng,spanLat,d};
+  _stateProjCache[stateAbbr]=proj;
+  return proj;
+}
+function getStateOutlineSvg(stateAbbr,cityLat,cityLng){
+  const proj=getStateProjection(stateAbbr);
+  if(!proj)return null;
+  let dot="";
+  if(cityLat!=null&&cityLng!=null){
+    const x=(cityLng-proj.minLng)*proj.cosLat;
+    const y=proj.spanLat-(cityLat-proj.minLat);
+    // Clamp inside the viewBox -- the simplified/Douglas-Peucker boundary
+    // can occasionally sit a hair inside the true state line near a city
+    // right on the border, and this keeps the dot from rendering outside
+    // the tiny SVG entirely in that edge case.
+    const cx=Math.min(proj.spanLng,Math.max(0,x));
+    const cy=Math.min(proj.spanLat,Math.max(0,y));
+    // Scale the dot to the state's own (projected) size, not a fixed pixel
+    // radius, so it reads consistently whether the state is tiny (Rhode
+    // Island) or huge (Texas) -- the whole viewBox gets scaled to the same
+    // rendered size on screen either way.
+    const r=Math.max(proj.spanLng,proj.spanLat)*0.05;
+    dot=`<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}" class="postcard-state-outline-dot"/>`;
+  }
+  return `<svg viewBox="0 0 ${proj.spanLng.toFixed(2)} ${proj.spanLat.toFixed(2)}" preserveAspectRatio="xMidYMid meet" class="postcard-state-outline"><path d="${proj.d}"/>${dot}</svg>`;
+}
 function renderTourMap(frag,tourEntry){
   const sortedDates=[...tourEntry.dates].sort();
   const stops=[];
@@ -3452,11 +3506,13 @@ function renderTourMap(frag,tourEntry){
     }
 
     const card=document.createElement("div");card.className="postcard-card";
+    const stateOutlineSvg=s.state?getStateOutlineSvg(s.state,s.lat,s.lng):null;
     card.innerHTML=
       `<div class="postcard-stub"><div class="postcard-badge">${i+1}</div>`+
       `<div class="postcard-date">${dateStub}</div></div>`+
       `<div class="postcard-perf"></div>`+
       `<div class="postcard-main">`+
+        (stateOutlineSvg||"")+
         `<div class="postcard-venue">${escapeHtml(s.venue||"Unknown Venue")}</div>`+
         `<div class="postcard-city">${escapeHtml(loc)}</div>`+
         (multiNight?
