@@ -575,6 +575,8 @@ body {
 .map-detail-sub { font-size:10px; color:var(--warm); margin-top:4px; letter-spacing:1px; }
 .song-date-link { color:var(--gold); cursor:pointer; border-bottom:1px dotted var(--gold); }
 .song-date-link:hover, .song-date-link:focus-visible { color:var(--cream); outline:none; }
+.song-name-link { color:var(--gold); cursor:pointer; border-bottom:1px dotted var(--gold); }
+.song-name-link:hover, .song-name-link:focus-visible { color:var(--cream); outline:none; }
 .song-gap-note { margin-top:2px; }
 
 /* ── Guess the Year game ── */
@@ -3713,25 +3715,80 @@ function renderTourSummaryPanel(frag,tourEntry){
 
   if(debuts.length||farewells.length){
     const detail=document.createElement("div");detail.className="tour-summary-detail";
-    if(debuts.length){const d=document.createElement("div");d.innerHTML=`<strong>Debuted:</strong> ${debuts.join(", ")}`;detail.appendChild(d);}
-    if(farewells.length){const f=document.createElement("div");f.innerHTML=`<strong>Last played:</strong> ${farewells.join(", ")}`;detail.appendChild(f);}
+    appendLinkedSongLine(detail,"Debuted:",debuts.map(name=>({name})));
+    appendLinkedSongLine(detail,"Last played:",farewells.map(name=>({name})));
     frag.appendChild(detail);
   }
 }
-function renderVenueSummaryPanel(frag,venueEntry){
-  const dates=[...venueEntry.dates].sort();
+// A song name that links to its own detail page -- used anywhere a
+// debut/comeback/farewell is named (tour, venue, state, country panels),
+// so these historical mentions are tappable like everything else in the
+// app rather than dead text. Falls back to plain text if the name somehow
+// doesn't resolve to a SONG_INDEX entry.
+// A specific show's date, formatted either as just the year (a career-span
+// context, e.g. song first/last played) or the full date (a specific
+// individual show, e.g. a gap's start/end), linking straight to that show.
+const MSFULL_SHARED=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function makeShowDateLink(dateStr,full){
+  const el=document.createElement("span");el.className="song-date-link";
+  if(full){const[yy,mm,dd]=dateStr.split("-").map(Number);el.textContent=`${MSFULL_SHARED[mm-1]} ${dd}, ${yy}`;}
+  else el.textContent=dateStr.slice(0,4);
+  el.setAttribute("role","button");el.setAttribute("tabindex","0");
+  el.setAttribute("aria-label",`View the ${dateStr} show`);
+  const show=getGDShow(dateStr);
+  const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
+  const go=()=>loadShowByDate(dateStr,show?show.venue:null,loc);
+  el.addEventListener("click",go);
+  el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});
+  return el;
+}
+function makeSongNameLink(name){
+  const entry=SONG_INDEX[normalizeSongTitle(name)];
+  if(!entry){const span=document.createElement("span");span.textContent=name;return span;}
+  const el=document.createElement("span");el.className="song-name-link";el.textContent=name;
+  el.setAttribute("role","button");el.setAttribute("tabindex","0");
+  el.setAttribute("aria-label",`View ${name}`);
+  const go=()=>showSongDetail(entry);
+  el.addEventListener("click",go);
+  el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});
+  return el;
+}
+// Appends one "<strong>Label:</strong> Song A, Song B (suffix)" line built
+// from real DOM nodes (each song name its own clickable link) rather than
+// a joined string, since string-joining is what made these unclickable
+// everywhere they were used before.
+function appendLinkedSongLine(container,label,items){
+  if(!items.length)return;
+  const line=document.createElement("div");
+  const strong=document.createElement("strong");strong.textContent=label+" ";line.appendChild(strong);
+  items.forEach((item,i)=>{
+    line.appendChild(makeSongNameLink(item.name));
+    if(item.suffix)line.appendChild(document.createTextNode(item.suffix));
+    if(i<items.length-1)line.appendChild(document.createTextNode(", "));
+  });
+  container.appendChild(line);
+}
+// The debut/comeback/tour scan shared by every "history of this place"
+// panel (venue, state, country) -- one pass over a list of dates rather
+// than three near-identical copies of the same loop.
+function computeLocationHistoryStats(dates){
+  const sorted=[...dates].sort();
   const debuts=[];
   const comebacks=[];
-  const toursHere=new Set();
-  dates.forEach(d=>{
+  const toursThrough=new Set();
+  sorted.forEach(d=>{
     const show=getGDShow(d);
     if(!show)return;
     (show.sets||[]).forEach(set=>(set.songs||[]).forEach(sg=>{if(sg.debut)debuts.push(sg.name);}));
     const c=getComebackSongForDate(d);
     if(c)comebacks.push({...c,date:d});
     const sl=getSetlist(d);
-    if(sl&&sl.tour)toursHere.add(sl.tour);
+    if(sl&&sl.tour)toursThrough.add(sl.tour);
   });
+  return {sortedDates:sorted,debuts,comebacks,toursThrough};
+}
+function renderVenueSummaryPanel(frag,venueEntry){
+  const {sortedDates:dates,debuts,comebacks,toursThrough}=computeLocationHistoryStats(venueEntry.dates);
 
   const panel=document.createElement("div");panel.className="tour-summary-panel";
   let html="";
@@ -3742,15 +3799,35 @@ function renderVenueSummaryPanel(frag,venueEntry){
   panel.innerHTML=html;
   frag.appendChild(panel);
 
-  if(debuts.length||comebacks.length||toursHere.size){
+  if(debuts.length||comebacks.length||toursThrough.size){
     const detail=document.createElement("div");detail.className="tour-summary-detail";
-    if(debuts.length){const d=document.createElement("div");d.innerHTML=`<strong>Debuted here:</strong> ${debuts.join(", ")}`;detail.appendChild(d);}
-    if(comebacks.length){
-      const c=document.createElement("div");
-      c.innerHTML=`<strong>Comebacks here:</strong> ${comebacks.map(cb=>`${escapeHtml(cb.name)} (first time in ${cb.gap} shows)`).join(", ")}`;
-      detail.appendChild(c);
-    }
-    if(toursHere.size){const t=document.createElement("div");t.innerHTML=`<strong>Tours through here:</strong> ${[...toursHere].join(", ")}`;detail.appendChild(t);}
+    appendLinkedSongLine(detail,"Debuted here:",debuts.map(name=>({name})));
+    appendLinkedSongLine(detail,"Comebacks here:",comebacks.map(cb=>({name:cb.name,suffix:` (first time in ${cb.gap} shows)`})));
+    if(toursThrough.size){const t=document.createElement("div");t.innerHTML=`<strong>Tours through here:</strong> ${[...toursThrough].join(", ")}`;detail.appendChild(t);}
+    frag.appendChild(detail);
+  }
+}
+// Same panel shape as the venue one, generalized for a whole US state or
+// country's performance history -- states/countries got nothing beyond a
+// show count and year range before, despite being the same kind of
+// "place GD played repeatedly" as a venue.
+function renderPlaceSummaryPanel(frag,dates,placeLabel){
+  const {sortedDates:sorted,debuts,comebacks,toursThrough}=computeLocationHistoryStats(dates);
+  if(!sorted.length)return;
+
+  const panel=document.createElement("div");panel.className="tour-summary-panel";
+  let html="";
+  html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${sorted.length}</div><div class="tour-summary-label">Show${sorted.length===1?"":"s"}</div></div>`;
+  html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${sorted[0].slice(0,4)}</div><div class="tour-summary-label">First Played</div></div>`;
+  html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${sorted[sorted.length-1].slice(0,4)}</div><div class="tour-summary-label">Last Played</div></div>`;
+  if(toursThrough.size)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${toursThrough.size}</div><div class="tour-summary-label">Tour${toursThrough.size===1?"":"s"}</div></div>`;
+  panel.innerHTML=html;
+  frag.appendChild(panel);
+
+  if(debuts.length||comebacks.length){
+    const detail=document.createElement("div");detail.className="tour-summary-detail";
+    appendLinkedSongLine(detail,`Debuted in ${placeLabel}:`,debuts.map(name=>({name})));
+    appendLinkedSongLine(detail,`Comebacks in ${placeLabel}:`,comebacks.map(cb=>({name:cb.name,suffix:` (first time in ${cb.gap} shows)`})));
     frag.appendChild(detail);
   }
 }
@@ -3760,7 +3837,24 @@ function showSegueShows(pairEntry,backFn,crumbBase){
     pairEntry.dates,
     [...crumbBase,{label}],
     backFn,
-    {title:label,sub:`${pairEntry.count} time${pairEntry.count===1?"":"s"}`}
+    {title:label,sub:`${pairEntry.count} time${pairEntry.count===1?"":"s"}`},
+    (frag)=>{
+      const sortedDates=[...pairEntry.dates].sort();
+      const localDrumSpace=new Set(["Drums","Space"]);
+      const rank=SEGUE_INDEX.filter(e=>!localDrumSpace.has(e.a)&&!localDrumSpace.has(e.b))
+        .sort((a,b)=>b.count-a.count).findIndex(e=>e===pairEntry)+1;
+      const panel=document.createElement("div");panel.className="tour-summary-panel";
+      let html=`<div class="tour-summary-stat"><div class="tour-summary-num">${pairEntry.count}</div><div class="tour-summary-label">Time${pairEntry.count===1?"":"s"}</div></div>`;
+      if(rank>0)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">#${rank}</div><div class="tour-summary-label">Most Common Segue</div></div>`;
+      panel.innerHTML=html;
+      frag.appendChild(panel);
+      const detail=document.createElement("div");detail.className="tour-summary-detail";
+      const firstLine=document.createElement("div");firstLine.append("First: ");firstLine.appendChild(makeShowDateLink(sortedDates[0],true));detail.appendChild(firstLine);
+      if(sortedDates.length>1){
+        const lastLine=document.createElement("div");lastLine.append("Most recent: ");lastLine.appendChild(makeShowDateLink(sortedDates[sortedDates.length-1],true));detail.appendChild(lastLine);
+      }
+      frag.appendChild(detail);
+    }
   );
 }
 function showSongPerformances(songEntry){
@@ -3988,20 +4082,7 @@ function showSongDetail(songEntry){
   const header=document.createElement("div");header.className="map-detail-header";
   header.innerHTML=`<h2>${songEntry.name}</h2>`;
   const sub=document.createElement("div");sub.className="map-detail-sub";
-  const MSFULL_SONG=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const makeDateLink=(dateStr,full)=>{
-    const el=document.createElement("span");el.className="song-date-link";
-    if(full){const[yy,mm,dd]=dateStr.split("-").map(Number);el.textContent=`${MSFULL_SONG[mm-1]} ${dd}, ${yy}`;}
-    else el.textContent=dateStr.slice(0,4);
-    el.setAttribute("role","button");el.setAttribute("tabindex","0");
-    el.setAttribute("aria-label",`View the ${dateStr} show`);
-    const show=getGDShow(dateStr);
-    const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
-    const go=()=>loadShowByDate(dateStr,show?show.venue:null,loc);
-    el.addEventListener("click",go);
-    el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});
-    return el;
-  };
+  const makeDateLink=makeShowDateLink;
   sub.append(`${perfCount} performance${perfCount===1?"":"s"} \u00b7 `);
   sub.appendChild(first?makeDateLink(first):document.createTextNode("?"));
   sub.append("\u2013");
@@ -4116,9 +4197,17 @@ async function showStateShows(stateCode,showsForState){
 
   const sortedGd=[...showsForState].sort((a,b)=>a.date.localeCompare(b.date));
   const years=sortedGd.map(s=>s.date.slice(0,4));
-  const header=document.createElement("div");header.className="map-detail-header";
-  header.innerHTML=`<h2>${label}</h2><div class="map-detail-sub">${sortedGd.length} show${sortedGd.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
-  frag.appendChild(header);
+  // Shared so both the pre-fetch loading screen and the post-fetch show
+  // list (which rebuilds mainEl from scratch via renderFilterableShowList)
+  // render the same header+panel, instead of it only surviving the
+  // loading screen and vanishing once the real list appears.
+  const extraFn=(f)=>{
+    const header=document.createElement("div");header.className="map-detail-header";
+    header.innerHTML=`<h2>${label}</h2><div class="map-detail-sub">${sortedGd.length} show${sortedGd.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
+    f.appendChild(header);
+    renderPlaceSummaryPanel(f,sortedGd.map(s=>s.date),label);
+  };
+  extraFn(frag);
   const loadingEl=document.createElement("div");loadingEl.className="msg";loadingEl.textContent=`Loading ${label} recordings\u2026`;frag.appendChild(loadingEl);
   mainEl.appendChild(frag);
 
@@ -4143,8 +4232,8 @@ async function showStateShows(stateCode,showsForState){
 
   shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
   if(!shows.length){mainEl.innerHTML=`<div class="error-msg">No recordings found for ${label}.</div>`;return;}
-  const rerender=()=>renderFilterableShowList(label,rerender,true);
-  renderFilterableShowList(label,rerender,true);
+  const rerender=()=>renderFilterableShowList(label,rerender,true,extraFn);
+  renderFilterableShowList(label,rerender,true,extraFn);
   if(missingCount>0){
     const note=document.createElement("div");note.className="msg";note.style.cssText="font-size:10px;opacity:0.6;padding:8px 16px";
     note.textContent=`${missingCount} show${missingCount===1?"":"s"} listed in setlist data had no matching recording found.`;
@@ -4163,6 +4252,7 @@ function showCountryShows(country,showsForCountry){
   const header=document.createElement("div");header.className="map-detail-header";
   header.innerHTML=`<h2>${country}</h2><div class="map-detail-sub">${sorted.length} show${sorted.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
   frag.appendChild(header);
+  renderPlaceSummaryPanel(frag,sorted.map(s=>s.date),country);
 
   const list=document.createElement("div");list.className="show-list";
   sorted.forEach(s=>{
