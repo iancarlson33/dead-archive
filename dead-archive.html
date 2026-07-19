@@ -573,6 +573,9 @@ body {
 .map-detail-header { padding:0 16px 16px; }
 .map-detail-header h2 { font-family:'Playfair Display',serif; font-size:26px; font-weight:900; color:var(--cream); }
 .map-detail-sub { font-size:10px; color:var(--warm); margin-top:4px; letter-spacing:1px; }
+.song-date-link { color:var(--gold); cursor:pointer; border-bottom:1px dotted var(--gold); }
+.song-date-link:hover, .song-date-link:focus-visible { color:var(--cream); outline:none; }
+.song-gap-note { margin-top:2px; }
 
 /* ── Guess the Year game ── */
 .game-entry-card {
@@ -1020,6 +1023,8 @@ body {
 .tag-stars      { color:var(--cream);background:#6B4A00;border-color:#6B4A00; }
 .tag-reddit-buzz{ color:var(--cream);background:#8A1A0A;border-color:#8A1A0A; }
 .tag-tour       { color:var(--cream);background:#1A5C52;border-color:#1A5C52; }
+.tag-venue-debut{ color:var(--ink);background:var(--gold);border-color:var(--gold); }
+.tag-comeback   { color:var(--cream);background:transparent;border-color:var(--gold); }
 .tag-venue-outdoor { color:var(--cream);background:#1A4A5C;border-color:#1A4A5C; }
 .tag-venue-indoor  { color:var(--cream);background:#3A3A42;border-color:#3A3A42; }
 
@@ -3411,7 +3416,8 @@ function showVenueShows(venueEntry){
     venueEntry.dates,
     [{label:"Venues",onclick:()=>{browseFacet="venue";showYearGrid();}},{label:venueEntry.venue}],
     ()=>{browseFacet="venue";showYearGrid();},
-    {title:venueEntry.venue,sub:loc}
+    {title:venueEntry.venue,sub:loc},
+    (frag)=>{renderVenueSummaryPanel(frag,venueEntry);}
   );
 }
 function showTourShows(tourEntry){
@@ -3712,6 +3718,42 @@ function renderTourSummaryPanel(frag,tourEntry){
     frag.appendChild(detail);
   }
 }
+function renderVenueSummaryPanel(frag,venueEntry){
+  const dates=[...venueEntry.dates].sort();
+  const debuts=[];
+  const comebacks=[];
+  const toursHere=new Set();
+  dates.forEach(d=>{
+    const show=getGDShow(d);
+    if(!show)return;
+    (show.sets||[]).forEach(set=>(set.songs||[]).forEach(sg=>{if(sg.debut)debuts.push(sg.name);}));
+    const c=getComebackSongForDate(d);
+    if(c)comebacks.push({...c,date:d});
+    const sl=getSetlist(d);
+    if(sl&&sl.tour)toursHere.add(sl.tour);
+  });
+
+  const panel=document.createElement("div");panel.className="tour-summary-panel";
+  let html="";
+  html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${dates.length}</div><div class="tour-summary-label">Show${dates.length===1?"":"s"}</div></div>`;
+  html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${dates[0].slice(0,4)}</div><div class="tour-summary-label">First Played</div></div>`;
+  html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${dates[dates.length-1].slice(0,4)}</div><div class="tour-summary-label">Last Played</div></div>`;
+  if(debuts.length)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${debuts.length}</div><div class="tour-summary-label">Song Debut${debuts.length===1?"":"s"} Here</div></div>`;
+  panel.innerHTML=html;
+  frag.appendChild(panel);
+
+  if(debuts.length||comebacks.length||toursHere.size){
+    const detail=document.createElement("div");detail.className="tour-summary-detail";
+    if(debuts.length){const d=document.createElement("div");d.innerHTML=`<strong>Debuted here:</strong> ${debuts.join(", ")}`;detail.appendChild(d);}
+    if(comebacks.length){
+      const c=document.createElement("div");
+      c.innerHTML=`<strong>Comebacks here:</strong> ${comebacks.map(cb=>`${escapeHtml(cb.name)} (first time in ${cb.gap} shows)`).join(", ")}`;
+      detail.appendChild(c);
+    }
+    if(toursHere.size){const t=document.createElement("div");t.innerHTML=`<strong>Tours through here:</strong> ${[...toursHere].join(", ")}`;detail.appendChild(t);}
+    frag.appendChild(detail);
+  }
+}
 function showSegueShows(pairEntry,backFn,crumbBase){
   const label=`${pairEntry.a} \u2192 ${pairEntry.b}`;
   showDrillDownShows(
@@ -3944,8 +3986,50 @@ function showSongDetail(songEntry){
   const last=(jb&&jb.gd_last_played)||songEntry.dates[songEntry.dates.length-1];
 
   const header=document.createElement("div");header.className="map-detail-header";
-  header.innerHTML=`<h2>${songEntry.name}</h2><div class="map-detail-sub">${perfCount} performance${perfCount===1?"":"s"} \u00b7 ${first?first.slice(0,4):"?"}\u2013${last?last.slice(0,4):"?"}</div>`;
+  header.innerHTML=`<h2>${songEntry.name}</h2>`;
+  const sub=document.createElement("div");sub.className="map-detail-sub";
+  const MSFULL_SONG=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const makeDateLink=(dateStr,full)=>{
+    const el=document.createElement("span");el.className="song-date-link";
+    if(full){const[yy,mm,dd]=dateStr.split("-").map(Number);el.textContent=`${MSFULL_SONG[mm-1]} ${dd}, ${yy}`;}
+    else el.textContent=dateStr.slice(0,4);
+    el.setAttribute("role","button");el.setAttribute("tabindex","0");
+    el.setAttribute("aria-label",`View the ${dateStr} show`);
+    const show=getGDShow(dateStr);
+    const loc=show?[show.city,show.state||show.country].filter(Boolean).join(", "):"";
+    const go=()=>loadShowByDate(dateStr,show?show.venue:null,loc);
+    el.addEventListener("click",go);
+    el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});
+    return el;
+  };
+  sub.append(`${perfCount} performance${perfCount===1?"":"s"} \u00b7 `);
+  sub.appendChild(first?makeDateLink(first):document.createTextNode("?"));
+  sub.append("\u2013");
+  sub.appendChild(last?makeDateLink(last):document.createTextNode("?"));
+  header.appendChild(sub);
   frag.appendChild(header);
+
+  // This song's own longest absence -- the same "shows since last played"
+  // math built for the itinerary's comeback notes, just pointed at one
+  // song's own timeline instead of checking every song on one date.
+  const sortedOwnDates=[...songEntry.dates].sort();
+  const showPos=getShowKeyPosition();
+  let biggestGap=null;
+  for(let i=1;i<sortedOwnDates.length;i++){
+    const p1=showPos[sortedOwnDates[i-1]],p2=showPos[sortedOwnDates[i]];
+    if(p1==null||p2==null)continue;
+    const gap=p2-p1-1;
+    if(gap>=COMEBACK_SONG_THRESHOLD&&(!biggestGap||gap>biggestGap.gap))biggestGap={gap,before:sortedOwnDates[i-1],after:sortedOwnDates[i]};
+  }
+  if(biggestGap){
+    const gapEl=document.createElement("div");gapEl.className="map-detail-sub song-gap-note";
+    gapEl.append(`Longest absence: ${biggestGap.gap} shows (`);
+    gapEl.appendChild(makeDateLink(biggestGap.before,true));
+    gapEl.append("\u2013");
+    gapEl.appendChild(makeDateLink(biggestGap.after,true));
+    gapEl.append(")");
+    frag.appendChild(gapEl);
+  }
 
   if(jb&&(jb.music||jb.lyrics||jb.lead_vocals)){
     const credit=document.createElement("div");credit.className="msg";credit.style.cssText="text-align:left;padding:0 16px 4px;font-size:11px;opacity:0.8";
@@ -4567,6 +4651,23 @@ function renderProgramHeader(doc,extra,targetEl){
   if(src){const t=document.createElement("span");t.className=`show-banner-tag tag-source-${src}`;t.textContent=sourceLabel(src);tagsEl.appendChild(t);}
   if(stars){const t=document.createElement("span");t.className="show-banner-tag tag-stars";t.textContent="★".repeat(Math.min(5,stars));tagsEl.appendChild(t);}
   releases.forEach(rel=>{const t=document.createElement("span");t.className="show-banner-tag tag-official";t.textContent=rel.title;tagsEl.appendChild(t);});
+
+  // First time at this venue, and any long-dormant song returning tonight --
+  // the same checks built for the Tour Itinerary, surfaced here too since
+  // most visits land on a show page directly rather than via a specific
+  // tour's itinerary view.
+  const showRec=getGDShow(isoDate(doc.date));
+  if(showRec&&showRec.venue){
+    const vkey=[showRec.venue,showRec.city,showRec.state||showRec.country].join("|");
+    const venueHistory=VENUE_INDEX[vkey];
+    if(venueHistory&&[...venueHistory.dates].sort()[0]===isoDate(doc.date)){
+      const t=document.createElement("span");t.className="show-banner-tag tag-venue-debut";t.textContent="\u2726 First time here";tagsEl.appendChild(t);
+    }
+  }
+  const comeback=getComebackSongForDate(isoDate(doc.date));
+  if(comeback){
+    const t=document.createElement("span");t.className="show-banner-tag tag-comeback";t.textContent=`\u2605 ${comeback.name} (${comeback.gap} shows)`;tagsEl.appendChild(t);
+  }
 
   if(sl&&sl.tour){
     const t=document.createElement("span");t.className="show-banner-tag tag-tour";t.textContent=sl.tour;
