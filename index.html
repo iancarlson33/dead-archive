@@ -299,12 +299,23 @@ body {
   display:flex; align-items:stretch; background:var(--ink); border:1px solid var(--rule);
   border-radius:6px; overflow:hidden; text-align:left; width:100%;
   font-family:inherit; padding:0;
+  box-shadow:0 3px 8px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.03) inset;
 }
 .postcard-card.is-link { cursor:pointer; }
-.postcard-card.is-link:hover, .postcard-card.is-link:focus-visible { border-color:var(--gold); outline:none; }
+.postcard-card.is-link:hover, .postcard-card.is-link:focus-visible {
+  border-color:var(--gold); outline:none;
+  box-shadow:0 4px 12px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.03) inset;
+}
 .postcard-stub {
   flex:0 0 60px; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:4px; padding:10px 4px; position:relative; background:rgba(200,150,10,0.05);
+  gap:2px; padding:10px 4px; position:relative; background:rgba(200,150,10,0.05);
+}
+/* The badge + date read as one postmark stamp -- a dashed cancellation
+   ring enclosing both -- rather than a number sitting above an unrelated
+   date, leaning into the postcard idea rather than a generic list index. */
+.postcard-stub::before {
+  content:""; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:56px; height:56px; border-radius:50%; border:1px dashed rgba(200,150,10,0.4);
 }
 .postcard-badge {
   width:26px; height:26px; border-radius:50%; background:var(--red); color:var(--cream);
@@ -325,10 +336,14 @@ body {
 .postcard-perf::before { top:-10px; }
 .postcard-perf::after { bottom:-10px; }
 .postcard-main { flex:1; min-width:0; padding:12px 14px; display:flex; flex-direction:column; gap:2px; position:relative; z-index:0; overflow:hidden; }
-.postcard-state-outline {
-  position:absolute; top:50%; right:6px; transform:translateY(-50%); z-index:-1;
-  height:76%; width:auto; pointer-events:none;
+/* The state watermark reads as an actual postage stamp tucked in the
+   corner -- a tilted dashed-perforation frame around it -- rather than an
+   unexplained silhouette floating in the background. */
+.postcard-stamp-frame {
+  position:absolute; top:50%; right:10px; transform:translateY(-50%) rotate(-5deg); z-index:-1;
+  height:70%; padding:4px; border:1px dashed rgba(200,150,10,0.3); pointer-events:none;
 }
+.postcard-state-outline { height:100%; width:auto; display:block; }
 .postcard-state-outline path { fill:var(--gold); opacity:0.16; }
 .postcard-venue { font-family:'Playfair Display',serif; font-weight:700; font-size:15px; color:var(--cream); line-height:1.25; }
 .postcard-city { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--warm); }
@@ -3602,7 +3617,7 @@ function renderTourMap(frag,tourEntry){
       `<div class="postcard-date">${dateStub}</div></div>`+
       `<div class="postcard-perf"></div>`+
       `<div class="postcard-main">`+
-        (stateOutlineSvg||"")+
+        (stateOutlineSvg?`<div class="postcard-stamp-frame">${stateOutlineSvg}</div>`:"")+
         `<div class="postcard-venue">${escapeHtml(s.venue||"Unknown Venue")}${isVenueDebut?'<span class="postcard-debut-badge">\u2726 First time here</span>':""}</div>`+
         `<div class="postcard-city">${escapeHtml(loc)}</div>`+
         (!multiNight&&singleNightReleases.length?
