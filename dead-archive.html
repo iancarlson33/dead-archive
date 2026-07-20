@@ -195,17 +195,20 @@ body {
 .seg-toggle { display:flex; gap:2px; padding:12px 16px; background:var(--brown); }
 .seg-toggle-btn {
   flex: 1;
+  min-width: 0;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1px;
-  padding: 10px 8px;
+  padding: 10px 6px;
   border: 1px solid var(--rule);
   background: var(--ink);
   color: var(--warm);
   cursor: pointer;
   border-radius: 3px;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
 }
 .seg-toggle-btn.active { background:var(--gold); color:var(--black); border-color:var(--gold); }
 
@@ -2430,6 +2433,7 @@ async function loadShowByIdentifier(r){
   activeShow={identifier:r.identifier,venue:r.venue,date:r.date,coverage:""};
   activeIdentifier=r.identifier;
   shareBtn.style.display="block";
+  pushView("show",{identifier:r.identifier});
   mainEl.innerHTML="";
   renderProgramHeader(activeShow,null);
   const loading=document.createElement("div");loading.className="msg";loading.id="setlistLoading";loading.textContent="Loading…";mainEl.appendChild(loading);
@@ -2468,21 +2472,100 @@ function setBreadcrumb(parts){
 }
 
 // ── Tab switching ──
+// ── BROWSER HISTORY: back/forward navigate within the app ──
+// Every view function calls pushView() once near the top of its own
+// render logic, describing itself with a small serializable state object.
+// That's the only per-view change needed -- one popstate listener plus
+// this dispatcher handle the actual back/forward reconstruction, looking
+// entries back up from the same global indexes (TOUR_INDEX, VENUE_INDEX,
+// etc.) the app already uses everywhere else, rather than storing live
+// object references in history state (which the browser can't structured-
+// clone reliably, and which wouldn't survive a real page reload anyway).
+let _restoringHistory=false;
+let _hasPushedInitialView=false;
+function activateTab(name){
+  document.querySelectorAll(".nav-tab").forEach(t=>{
+    const isActive=t.dataset.tab===name;
+    t.classList.toggle("active",isActive);
+    t.setAttribute("aria-selected",isActive?"true":"false");
+  });
+  currentTab=name;
+}
+function pushView(view,params){
+  if(_restoringHistory)return;
+  const state=Object.assign({view},params);
+  const url=view==="show"?(location.pathname+"?show="+encodeURIComponent(params.identifier)):location.pathname;
+  try{
+    if(!_hasPushedInitialView){history.replaceState(state,"",url);_hasPushedInitialView=true;}
+    else history.pushState(state,"",url);
+  }catch(e){}
+}
+// Regenerates the same {date,venue,city,state|country} arrays showMap()
+// builds inline, so a restored state/country view doesn't depend on a
+// stale closure from whenever showMap() last ran.
+function getShowsForState(code){
+  const out=[];
+  Object.entries(GDSHOWS).forEach(([d,show])=>{
+    if(show.state===code){const key=d.replace(/-\d$/,"");out.push({date:key,venue:show.venue,city:show.city,state:show.state});}
+  });
+  return out;
+}
+function getShowsForCountry(country){
+  const out=[];
+  Object.entries(GDSHOWS).forEach(([d,show])=>{
+    if(show.country===country&&!show.state){const key=d.replace(/-\d$/,"");out.push({date:key,venue:show.venue,city:show.city,country:show.country});}
+  });
+  return out;
+}
+function getReleaseByTitle(title){
+  let rel=null;
+  const relDates=Object.entries(RELEASES).filter(([d,entries])=>{
+    const match=entries.find(e=>e.title===title);
+    if(match)rel=match;
+    return !!match;
+  }).map(([d])=>d).sort();
+  return rel?{rel,relDates}:null;
+}
+function restoreView(state){
+  _restoringHistory=true;
+  try{
+    if(!state||!state.view){activateTab("years");showYearGrid();return;}
+    switch(state.view){
+      case "years": activateTab("years"); showYearGrid(); break;
+      case "year": activateTab("years"); loadYear(state.year); break;
+      case "notable": activateTab("notable"); showNotable(); break;
+      case "releases": activateTab("releases"); showReleases(); break;
+      case "release": { activateTab("releases"); const r=getReleaseByTitle(state.title); if(r)showReleaseShows(r.rel,r.relDates); else showReleases(); break; }
+      case "favorites": activateTab("favorites"); favSubView=state.sub||"favorites"; showFavoritesView(); break;
+      case "map": activateTab("map"); showMap(); break;
+      case "state": { activateTab("map"); showStateShows(state.code,getShowsForState(state.code)); break; }
+      case "country": { activateTab("map"); showCountryShows(state.country,getShowsForCountry(state.country)); break; }
+      case "tour": { activateTab("years"); const t=TOUR_INDEX[state.name]; if(t)showTourShows(t); else showYearGrid(); break; }
+      case "venue": { activateTab("years"); const v=VENUE_INDEX[state.vkey]; if(v)showVenueShows(v); else showYearGrid(); break; }
+      case "segue": { activateTab("years"); const seg=SEGUE_INDEX.find(e=>e.a===state.a&&e.b===state.b); if(seg)showSegueShows(seg,()=>history.back(),[{label:"Back",onclick:()=>history.back()}]); else showYearGrid(); break; }
+      case "songPerf": { activateTab("years"); const s=SONG_INDEX[state.key]; if(s)showSongPerformances(s); else showYearGrid(); break; }
+      case "songTag": activateTab("years"); showSongsByTag(state.tag); break;
+      case "song": { activateTab("years"); const s=SONG_INDEX[state.key]; if(s)showSongDetail(s); else showYearGrid(); break; }
+      case "show": loadShowByIdentifier({identifier:state.identifier,venue:"",date:""}); break;
+      default: activateTab("years"); showYearGrid();
+    }
+  } finally { _restoringHistory=false; }
+}
+window.addEventListener("popstate",e=>restoreView(e.state));
+
 document.querySelectorAll(".nav-tab").forEach(tab=>{
   tab.addEventListener("click",()=>{
-    document.querySelectorAll(".nav-tab").forEach(t=>{t.classList.remove("active");t.setAttribute("aria-selected","false");});
-    tab.classList.add("active");tab.setAttribute("aria-selected","true");
-    currentTab=tab.dataset.tab;
+    activateTab(tab.dataset.tab);
     setBreadcrumb(null);
     document.getElementById("programHeader")?.remove();
     
     document.getElementById("recordingSwitcher")?.remove();
     shareBtn.style.display="none";
-    if(currentTab==="years")showYearGrid();
-    else if(currentTab==="notable")showNotable();
-    else if(currentTab==="releases")showReleases();
-    else if(currentTab==="favorites")showFavoritesView();
-    else if(currentTab==="map")showMap();
+    if(currentTab==="years"){showYearGrid();}
+    else if(currentTab==="notable"){showNotable();}
+    else if(currentTab==="releases"){showReleases();}
+    else if(currentTab==="favorites"){showFavoritesView();}
+    else if(currentTab==="map"){showMap();}
   });
 });
 
@@ -2529,6 +2612,7 @@ function buildTodayInHistory(){
 }
 
 function showYearGrid(){
+  pushView("years",{});
   currentYear=null;shows=[];
   setBreadcrumb(null);
   document.getElementById("programHeader")?.remove();
@@ -2718,6 +2802,7 @@ function renderSongFacet(targetEl){
 
 // ── NOTABLE SHOWS ──
 function showNotable(){
+  pushView("notable",{});
   setBreadcrumb([{label:"Notable shows"}]);
   mainEl.innerHTML="";
 
@@ -3012,6 +3097,7 @@ function submitGtyGuess(){
 }
 function showFavoritesView(){
   favSubView=favSubView||"favorites";
+  pushView("favorites",{sub:favSubView});
   setBreadcrumb([{label:"Favorites"}]);
   mainEl.innerHTML="";
 
@@ -3165,6 +3251,7 @@ async function loadShowByDate(date,venue,location){
 
 // ── OFFICIAL RELEASES ──
 function showReleases(){
+  pushView("releases",{});
   setBreadcrumb([{label:"Official releases"}]);
   mainEl.innerHTML="";
 
@@ -3264,6 +3351,7 @@ function mapColorFor(count,max){
 }
 
 function showMap(){
+  pushView("map",{});
   currentTab="map";
   setBreadcrumb([{label:"Map"}]);
   mainEl.innerHTML="";
@@ -3413,6 +3501,7 @@ async function showDrillDownShows(dateList,crumbParts,backFn,header,extraContent
 
 // ── VENUE / TOUR / SEGUE-PAIR DRILL-DOWNS ──
 function showVenueShows(venueEntry){
+  pushView("venue",{vkey:[venueEntry.venue,venueEntry.city,venueEntry.state||venueEntry.country].join("|")});
   const loc=[venueEntry.city,venueEntry.state||venueEntry.country].filter(Boolean).join(", ");
   showDrillDownShows(
     venueEntry.dates,
@@ -3423,6 +3512,7 @@ function showVenueShows(venueEntry){
   );
 }
 function showTourShows(tourEntry){
+  pushView("tour",{name:tourEntry.name});
   showDrillDownShows(
     tourEntry.dates,
     [{label:"Tours",onclick:()=>{browseFacet="tour";showYearGrid();}},{label:tourEntry.name}],
@@ -3832,6 +3922,7 @@ function renderPlaceSummaryPanel(frag,dates,placeLabel){
   }
 }
 function showSegueShows(pairEntry,backFn,crumbBase){
+  pushView("segue",{a:pairEntry.a,b:pairEntry.b});
   const label=`${pairEntry.a} \u2192 ${pairEntry.b}`;
   showDrillDownShows(
     pairEntry.dates,
@@ -3858,6 +3949,7 @@ function showSegueShows(pairEntry,backFn,crumbBase){
   );
 }
 function showSongPerformances(songEntry){
+  pushView("songPerf",{key:normalizeSongTitle(songEntry.name)});
   showDrillDownShows(
     songEntry.dates,
     [{label:"Songs",onclick:()=>{browseFacet="song";showYearGrid();}},{label:songEntry.name}],
@@ -3867,6 +3959,7 @@ function showSongPerformances(songEntry){
 }
 
 function showSongsByTag(tag){
+  pushView("songTag",{tag});
   const names=[...new Set(TAG_INDEX[tag]||[])].sort();
   setBreadcrumb([{label:"Songs",onclick:()=>{browseFacet="song";showYearGrid();}},{label:tagLabel(tag)}]);
   activeShow=null;
@@ -4068,6 +4161,7 @@ function renderSongTimeline(targetEl){
 }
 
 function showSongDetail(songEntry){
+  pushView("song",{key:normalizeSongTitle(songEntry.name)});
   setBreadcrumb([{label:"Songs",onclick:()=>{browseFacet="song";showYearGrid();}},{label:songEntry.name}]);
   activeShow=null;
   mainEl.innerHTML="";
@@ -4188,6 +4282,7 @@ function showSongDetail(songEntry){
 }
 
 async function showStateShows(stateCode,showsForState){
+  pushView("state",{code:stateCode});
   const label=STATE_NAMES[stateCode]||stateCode;
   setBreadcrumb([{label:"Map",onclick:()=>showMap()},{label}]);
   activeShow=null;sourceFilter="all";
@@ -4242,6 +4337,7 @@ async function showStateShows(stateCode,showsForState){
 }
 
 function showCountryShows(country,showsForCountry){
+  pushView("country",{country});
   setBreadcrumb([{label:"Map",onclick:()=>showMap()},{label:country}]);
   mainEl.innerHTML="";
   const frag=document.createDocumentFragment();
@@ -4278,6 +4374,7 @@ function showCountryShows(country,showsForCountry){
 
 // ── RELEASE → SHOW LIST (intermediate screen for multi-show box sets) ──
 function showReleaseShows(rel,relDates){
+  pushView("release",{title:rel.title});
   setBreadcrumb([
     {label:"Official releases",onclick:()=>showReleases()},
     {label:rel.title}
@@ -4353,6 +4450,7 @@ function fetchYearRecordings(year){
 }
 
 async function loadYear(year){
+  pushView("year",{year});
   currentYear=year;activeShow=null;shows=[];sourceFilter="all";
   document.getElementById("programHeader")?.remove();
   
@@ -4601,10 +4699,7 @@ async function loadShow(idx){
   mainEl.querySelectorAll(".show-row").forEach((r,i)=>r.classList.toggle("active",i===idx));
   shareBtn.style.display="block";
 
-  // Update URL
-  const params=new URLSearchParams(window.location.search);
-  params.set("show",doc.identifier);
-  window.history.replaceState({},"",window.location.pathname+"?"+params.toString());
+  pushView("show",{identifier:doc.identifier});
 
   // Build fixed-order skeleton — all slots created upfront in correct order
   mainEl.innerHTML="";
