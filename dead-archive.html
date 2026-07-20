@@ -2429,11 +2429,48 @@ function renderRecentTray(){
   });
 }
 
+// GD recording identifiers on archive.org conventionally embed the show's
+// date, but not always in the same format -- most are hyphenated
+// (gd1977-05-08...), but some older-style ones are compact (gd770508... or
+// gd19770508...). Tries hyphenated first since it's unambiguous, then
+// falls back to an 8-digit compact run interpreted as YYYYMMDD.
+function parseDateFromIdentifier(id){
+  if(!id)return null;
+  const hyphenated=id.match(/(\d{4}-\d{2}-\d{2})/);
+  if(hyphenated)return hyphenated[1];
+  const compact4=id.match(/(\d{4})(\d{2})(\d{2})/);
+  if(compact4){
+    const[,y,mo,da]=compact4;
+    if(mo>="01"&&mo<="12"&&da>="01"&&da<="31")return `${y}-${mo}-${da}`;
+  }
+  // 2-digit-year compact form (gd770508...) -- safe to assume 19XX since
+  // every GD show falls within 1965-1995.
+  const compact2=id.match(/gd(\d{2})(\d{2})(\d{2})/i);
+  if(compact2){
+    const[,yy,mo,da]=compact2;
+    if(yy>="65"&&yy<="99"&&mo>="01"&&mo<="12"&&da>="01"&&da<="31")return `19${yy}-${mo}-${da}`;
+  }
+  return null;
+}
 async function loadShowByIdentifier(r){
-  activeShow={identifier:r.identifier,venue:r.venue,date:r.date,coverage:""};
+  // If we know the real calendar date, prefer the app's own reliable
+  // gdshowsdb entry for venue/city/state over whatever was passed in --
+  // this is what actually fixes the "Unknown Venue" blank-header problem,
+  // since the archive.org metadata fetched below was never actually used
+  // to fill in venue/date/location (renderProgramHeader only reads
+  // doc.venue/doc.date/doc.coverage, never the metadata response).
+  // Falls back to parsing a date out of the identifier itself if the
+  // caller didn't have one on hand, since recording-level metadata (what
+  // callers often derive a date from) isn't always populated correctly.
+  let venue=r.venue,date=r.date||parseDateFromIdentifier(r.identifier)||"",coverage="";
+  if(date){
+    const gdshow=getGDShow(date);
+    if(gdshow){venue=gdshow.venue||venue;coverage=[gdshow.city,gdshow.state||gdshow.country].filter(Boolean).join(", ");}
+  }
+  activeShow={identifier:r.identifier,venue,date,coverage};
   activeIdentifier=r.identifier;
   shareBtn.style.display="block";
-  pushView("show",{identifier:r.identifier});
+  pushView("show",{identifier:r.identifier,date});
   mainEl.innerHTML="";
   renderProgramHeader(activeShow,null);
   const loading=document.createElement("div");loading.className="msg";loading.id="setlistLoading";loading.textContent="Loading…";mainEl.appendChild(loading);
@@ -2483,6 +2520,7 @@ function setBreadcrumb(parts){
 // clone reliably, and which wouldn't survive a real page reload anyway).
 let _restoringHistory=false;
 let _hasPushedInitialView=false;
+const _initialHistoryLength=history.length;
 function activateTab(name){
   document.querySelectorAll(".nav-tab").forEach(t=>{
     const isActive=t.dataset.tab===name;
@@ -2546,7 +2584,7 @@ function restoreView(state){
       case "songPerf": { activateTab("years"); const s=SONG_INDEX[state.key]; if(s)showSongPerformances(s); else showYearGrid(); break; }
       case "songTag": activateTab("years"); showSongsByTag(state.tag); break;
       case "song": { activateTab("years"); const s=SONG_INDEX[state.key]; if(s)showSongDetail(s); else showYearGrid(); break; }
-      case "show": loadShowByIdentifier({identifier:state.identifier,venue:"",date:""}); break;
+      case "show": loadShowByIdentifier({identifier:state.identifier,venue:"",date:state.date||""}); break;
       default: activateTab("years"); showYearGrid();
     }
   } finally { _restoringHistory=false; }
@@ -4699,7 +4737,14 @@ async function loadShow(idx){
   mainEl.querySelectorAll(".show-row").forEach((r,i)=>r.classList.toggle("active",i===idx));
   shareBtn.style.display="block";
 
-  pushView("show",{identifier:doc.identifier});
+  // doc.date is this specific recording's own archive.org metadata, which
+  // isn't always reliable (missing/blank on some uploads) even when the
+  // show's real date is well known -- fall back to parsing one out of the
+  // identifier itself (which conventionally embeds it) rather than letting
+  // one recording's bad metadata silently break history restoration for
+  // the whole show.
+  const resolvedDate=isoDate(doc.date)||parseDateFromIdentifier(doc.identifier);
+  pushView("show",{identifier:doc.identifier,date:resolvedDate});
 
   // Build fixed-order skeleton — all slots created upfront in correct order
   mainEl.innerHTML="";
@@ -4805,13 +4850,8 @@ function renderProgramHeader(doc,extra,targetEl){
   back.textContent="← Back";
   back.addEventListener("click",()=>{
     shareBtn.style.display="none";
-    window.history.replaceState({},"",window.location.pathname);
-    if(currentTab==="notable")showNotable();
-    else if(currentTab==="releases")showReleases();
-    else if(currentTab==="favorites")showFavoritesView();
-    else if(currentTab==="map")showMap();
-    else if(currentYear)loadYear(currentYear);
-    else showYearGrid();
+    if(history.length>_initialHistoryLength)history.back();
+    else{activateTab("years");showYearGrid();}
   });
   header.appendChild(back);
 
@@ -4997,6 +5037,8 @@ function buildRecordingSwitcher(currentDoc,alts){
       wrap.querySelectorAll(".switcher-item").forEach(i=>i.classList.remove("active"));
       item.classList.add("active");
       activeIdentifier=alt.identifier;
+      const switchDate=isoDate(activeShow?.date)||parseDateFromIdentifier(activeShow?.identifier)||parseDateFromIdentifier(alt.identifier);
+      pushView("show",{identifier:alt.identifier,date:switchDate});
 
       // Clear and reload the tracks slot
       const slot=document.getElementById("tracksSlot");
