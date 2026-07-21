@@ -3870,6 +3870,23 @@ function makeShowDateLink(dateStr,full){
   el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});
   return el;
 }
+// Links a date's venue name to that venue's own page -- pairs with
+// makeShowDateLink so a "debuted here, on this date" line can send you to
+// either the specific show or the venue's full history.
+function makeVenueLink(dateStr){
+  const show=getGDShow(dateStr);
+  if(!show||!show.venue){const span=document.createElement("span");span.textContent="an unknown venue";return span;}
+  const vkey=[show.venue,show.city,show.state||show.country].join("|");
+  const venueEntry=VENUE_INDEX[vkey];
+  if(!venueEntry){const span=document.createElement("span");span.textContent=show.venue;return span;}
+  const el=document.createElement("span");el.className="song-date-link";el.textContent=show.venue;
+  el.setAttribute("role","button");el.setAttribute("tabindex","0");
+  el.setAttribute("aria-label",`View ${show.venue}'s history`);
+  const go=()=>showVenueShows(venueEntry);
+  el.addEventListener("click",go);
+  el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});
+  return el;
+}
 function makeSongNameLink(name){
   const entry=SONG_INDEX[normalizeSongTitle(name)];
   if(!entry){const span=document.createElement("span");span.textContent=name;return span;}
@@ -3904,6 +3921,8 @@ function computeLocationHistoryStats(dates){
   const debuts=[];
   const comebacks=[];
   const toursThrough=new Set();
+  let totalViews=0;
+  let headyCount=0;
   sorted.forEach(d=>{
     const show=getGDShow(d);
     if(!show)return;
@@ -3912,11 +3931,14 @@ function computeLocationHistoryStats(dates){
     if(c)comebacks.push({...c,date:d});
     const sl=getSetlist(d);
     if(sl&&sl.tour)toursThrough.add(sl.tour);
+    const rec=ARCHIVE_VIEWS[d];
+    if(rec)totalViews+=rec.all_time;
+    headyCount+=(HEADY[d]||[]).length;
   });
-  return {sortedDates:sorted,debuts,comebacks,toursThrough};
+  return {sortedDates:sorted,debuts,comebacks,toursThrough,totalViews,headyCount};
 }
 function renderVenueSummaryPanel(frag,venueEntry){
-  const {sortedDates:dates,debuts,comebacks,toursThrough}=computeLocationHistoryStats(venueEntry.dates);
+  const {sortedDates:dates,debuts,comebacks,toursThrough,totalViews,headyCount}=computeLocationHistoryStats(venueEntry.dates);
 
   const panel=document.createElement("div");panel.className="tour-summary-panel";
   let html="";
@@ -3924,6 +3946,8 @@ function renderVenueSummaryPanel(frag,venueEntry){
   html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${dates[0].slice(0,4)}</div><div class="tour-summary-label">First Played</div></div>`;
   html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${dates[dates.length-1].slice(0,4)}</div><div class="tour-summary-label">Last Played</div></div>`;
   if(debuts.length)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${debuts.length}</div><div class="tour-summary-label">Song Debut${debuts.length===1?"":"s"} Here</div></div>`;
+  if(totalViews)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${fmtViews(totalViews)}</div><div class="tour-summary-label">Archive Listens</div></div>`;
+  if(headyCount)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${headyCount}</div><div class="tour-summary-label">Heady Version${headyCount===1?"":"s"}</div></div>`;
   panel.innerHTML=html;
   frag.appendChild(panel);
 
@@ -3940,7 +3964,7 @@ function renderVenueSummaryPanel(frag,venueEntry){
 // show count and year range before, despite being the same kind of
 // "place GD played repeatedly" as a venue.
 function renderPlaceSummaryPanel(frag,dates,placeLabel){
-  const {sortedDates:sorted,debuts,comebacks,toursThrough}=computeLocationHistoryStats(dates);
+  const {sortedDates:sorted,debuts,comebacks,toursThrough,totalViews,headyCount}=computeLocationHistoryStats(dates);
   if(!sorted.length)return;
 
   const panel=document.createElement("div");panel.className="tour-summary-panel";
@@ -3949,6 +3973,8 @@ function renderPlaceSummaryPanel(frag,dates,placeLabel){
   html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${sorted[0].slice(0,4)}</div><div class="tour-summary-label">First Played</div></div>`;
   html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${sorted[sorted.length-1].slice(0,4)}</div><div class="tour-summary-label">Last Played</div></div>`;
   if(toursThrough.size)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${toursThrough.size}</div><div class="tour-summary-label">Tour${toursThrough.size===1?"":"s"}</div></div>`;
+  if(totalViews)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${fmtViews(totalViews)}</div><div class="tour-summary-label">Archive Listens</div></div>`;
+  if(headyCount)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${headyCount}</div><div class="tour-summary-label">Heady Version${headyCount===1?"":"s"}</div></div>`;
   panel.innerHTML=html;
   frag.appendChild(panel);
 
@@ -4215,12 +4241,26 @@ function showSongDetail(songEntry){
   header.innerHTML=`<h2>${songEntry.name}</h2>`;
   const sub=document.createElement("div");sub.className="map-detail-sub";
   const makeDateLink=makeShowDateLink;
-  sub.append(`${perfCount} performance${perfCount===1?"":"s"} \u00b7 `);
-  sub.appendChild(first?makeDateLink(first):document.createTextNode("?"));
-  sub.append("\u2013");
-  sub.appendChild(last?makeDateLink(last):document.createTextNode("?"));
+  sub.append(`${perfCount} performance${perfCount===1?"":"s"}`);
   header.appendChild(sub);
   frag.appendChild(header);
+
+  if(first){
+    const debutLine=document.createElement("div");debutLine.className="map-detail-sub";
+    debutLine.append("Debut: ");
+    debutLine.appendChild(makeDateLink(first,true));
+    debutLine.append(" at ");
+    debutLine.appendChild(makeVenueLink(first));
+    frag.appendChild(debutLine);
+  }
+  if(last&&last!==first){
+    const lastLine=document.createElement("div");lastLine.className="map-detail-sub";
+    lastLine.append("Last played: ");
+    lastLine.appendChild(makeDateLink(last,true));
+    lastLine.append(" at ");
+    lastLine.appendChild(makeVenueLink(last));
+    frag.appendChild(lastLine);
+  }
 
   // This song's own longest absence -- the same "shows since last played"
   // math built for the itinerary's comeback notes, just pointed at one
@@ -4304,8 +4344,19 @@ function showSongDetail(songEntry){
       const gdshow=getGDShow(v.date);
       const venue=v.venue||(gdshow&&gdshow.venue)||"Unknown Venue";
       const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
-      row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">\ud83d\udd25 #${i+1} \u00b7 ${v.date||"?"}</div><div class="show-location">${venue}</div></div><div class="show-arrow">\u203a</div>`;
+      row.innerHTML=`<div class="show-info-col"><div class="show-venue-name">\ud83d\udd25 #${i+1} \u00b7 ${v.date||"?"}</div><div class="show-location"><span class="heady-venue-link">${venue}</span></div></div><div class="show-arrow">\u203a</div>`;
       if(v.date)row.addEventListener("click",()=>loadShowByDate(v.date,venue,""));
+      const venueLink=row.querySelector(".heady-venue-link");
+      if(venueLink&&gdshow&&gdshow.venue){
+        const vkey=[gdshow.venue,gdshow.city,gdshow.state||gdshow.country].join("|");
+        const venueEntry=VENUE_INDEX[vkey];
+        if(venueEntry){
+          venueLink.setAttribute("role","button");venueLink.setAttribute("tabindex","0");
+          venueLink.classList.add("tag-clickable");
+          venueLink.addEventListener("click",e=>{e.stopPropagation();showVenueShows(venueEntry);});
+          venueLink.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();showVenueShows(venueEntry);}});
+        }
+      }
       list.appendChild(row);
     });
     frag.appendChild(list);
