@@ -578,6 +578,8 @@ body {
 .map-detail-sub { font-size:10px; color:var(--warm); margin-top:4px; letter-spacing:1px; }
 .song-date-link { color:var(--gold); cursor:pointer; border-bottom:1px dotted var(--gold); }
 .song-date-link:hover, .song-date-link:focus-visible { color:var(--cream); outline:none; }
+.place-link { color:var(--gold); cursor:pointer; border-bottom:1px dotted var(--gold); }
+.place-link:hover, .place-link:focus-visible { color:var(--cream); outline:none; }
 .song-name-link { color:var(--gold); cursor:pointer; border-bottom:1px dotted var(--gold); }
 .song-name-link:hover, .song-name-link:focus-visible { color:var(--cream); outline:none; }
 .song-gap-note { margin-top:2px; }
@@ -1701,7 +1703,7 @@ audio { display:none; }
   </div>
   <div class="search-row" role="search">
     <label for="searchInput" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Search shows</label>
-    <input class="search-input" id="searchInput" type="search" placeholder="Search venue, city, year…" aria-label="Search shows">
+    <input class="search-input" id="searchInput" type="search" placeholder="Search venue, city, year, song…" aria-label="Search shows">
     <button class="search-btn" id="searchBtn" aria-label="Search">Search</button>
   </div>
   <nav class="nav-tabs" aria-label="Browse sections">
@@ -3514,10 +3516,30 @@ async function showDrillDownShows(dateList,crumbParts,backFn,header,extraContent
 
   const sortedDates=[...dateList].sort();
   const years=sortedDates.map(d=>d.slice(0,4));
-  const headerEl=document.createElement("div");headerEl.className="map-detail-header";
-  headerEl.innerHTML=`<h2>${header.title}</h2><div class="map-detail-sub">${header.sub?header.sub+" \u00b7 ":""}${sortedDates.length} show${sortedDates.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
-  frag.appendChild(headerEl);
-  if(extraContentFn)extraContentFn(frag);
+  // Builds the title/sub/place-link header -- folded into the combined
+  // extraFn below (rather than only built once, upfront) so it survives
+  // renderFilterableShowList's post-fetch and post-filter-change rebuilds,
+  // the same way the summary panel already does.
+  const buildHeader=(f)=>{
+    const headerEl=document.createElement("div");headerEl.className="map-detail-header";
+    const stateLinkMarkup=header.stateCode?` <span class="place-link" data-code="${header.stateCode}">(${STATE_NAMES[header.stateCode]||header.stateCode})</span>`:"";
+    headerEl.innerHTML=`<h2>${header.title}</h2><div class="map-detail-sub">${header.sub?header.sub+stateLinkMarkup+" \u00b7 ":""}${sortedDates.length} show${sortedDates.length===1?"":"s"} \u00b7 ${years[0]}\u2013${years[years.length-1]}</div>`;
+    f.appendChild(headerEl);
+    const placeLink=headerEl.querySelector(".place-link");
+    if(placeLink){
+      placeLink.setAttribute("role","button");placeLink.setAttribute("tabindex","0");
+      placeLink.setAttribute("aria-label",`View all shows in ${STATE_NAMES[header.stateCode]||header.stateCode}`);
+      const go=()=>{
+        const code=header.stateCode;
+        if(STATE_NAMES[code])showStateShows(code,getShowsForState(code));
+        else showCountryShows(code,getShowsForCountry(code));
+      };
+      placeLink.addEventListener("click",go);
+      placeLink.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});
+    }
+  };
+  const combinedExtraFn=(f)=>{buildHeader(f);if(extraContentFn)extraContentFn(f);};
+  combinedExtraFn(frag);
   const loadingEl=document.createElement("div");loadingEl.className="msg";loadingEl.textContent=`Loading ${header.title} recordings\u2026`;frag.appendChild(loadingEl);
   mainEl.appendChild(frag);
 
@@ -3528,8 +3550,8 @@ async function showDrillDownShows(dateList,crumbParts,backFn,header,extraContent
   const missingCount=sortedDates.length-Object.keys(byDate).length;
   shows=Object.values(byDate).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
   if(!shows.length){mainEl.innerHTML=`<div class="error-msg">No recordings found for ${header.title}.</div>`;return;}
-  const rerender=()=>renderFilterableShowList(header.title,rerender,true,extraContentFn);
-  renderFilterableShowList(header.title,rerender,true,extraContentFn);
+  const rerender=()=>renderFilterableShowList(header.title,rerender,true,combinedExtraFn);
+  renderFilterableShowList(header.title,rerender,true,combinedExtraFn);
   if(missingCount>0){
     const note=document.createElement("div");note.className="msg";note.style.cssText="font-size:10px;opacity:0.6;padding:8px 16px";
     note.textContent=`${missingCount} show${missingCount===1?"":"s"} listed in setlist data had no matching recording found.`;
@@ -3540,12 +3562,11 @@ async function showDrillDownShows(dateList,crumbParts,backFn,header,extraContent
 // ── VENUE / TOUR / SEGUE-PAIR DRILL-DOWNS ──
 function showVenueShows(venueEntry){
   pushView("venue",{vkey:[venueEntry.venue,venueEntry.city,venueEntry.state||venueEntry.country].join("|")});
-  const loc=[venueEntry.city,venueEntry.state||venueEntry.country].filter(Boolean).join(", ");
   showDrillDownShows(
     venueEntry.dates,
     [{label:"Venues",onclick:()=>{browseFacet="venue";showYearGrid();}},{label:venueEntry.venue}],
     ()=>{browseFacet="venue";showYearGrid();},
-    {title:venueEntry.venue,sub:loc},
+    {title:venueEntry.venue,sub:venueEntry.city,stateCode:venueEntry.state||venueEntry.country},
     (frag)=>{renderVenueSummaryPanel(frag,venueEntry);}
   );
 }
