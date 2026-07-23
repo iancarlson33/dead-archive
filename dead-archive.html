@@ -3577,7 +3577,7 @@ function showTourShows(tourEntry){
     [{label:"Tours",onclick:()=>{browseFacet="tour";showYearGrid();}},{label:tourEntry.name}],
     ()=>{browseFacet="tour";showYearGrid();},
     {title:tourEntry.name,sub:`${tourEntry.dates.length} shows`},
-    (frag)=>{renderTourMap(frag,tourEntry);renderTourSummaryPanel(frag,tourEntry);}
+    (frag)=>{renderTourSummaryPanel(frag,tourEntry);renderTourMap(frag,tourEntry);}
   );
 }
 // Plots the tour as a chronological stack of postcard/ticket-stub cards
@@ -3853,6 +3853,7 @@ function renderTourSummaryPanel(frag,tourEntry){
 
   if(!debuts.length&&!farewells.length&&!totalViews&&!headyCount)return;
 
+  appendAtAGlanceLabel(frag);
   const panel=document.createElement("div");panel.className="tour-summary-panel";
   let html="";
   if(debuts.length)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${debuts.length}</div><div class="tour-summary-label">Debut${debuts.length===1?"":"s"}</div></div>`;
@@ -3937,6 +3938,13 @@ function appendLinkedSongLine(container,label,items){
 // The debut/comeback/tour scan shared by every "history of this place"
 // panel (venue, state, country) -- one pass over a list of dates rather
 // than three near-identical copies of the same loop.
+// The one shared visual cue tying together every "deep dive" page --
+// venue, tour, song, segue, state/country -- so they read as the same
+// kind of page no matter which of the app's tabs actually got you there.
+function appendAtAGlanceLabel(frag){
+  const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="\u2014 At A Glance \u2014";
+  frag.appendChild(lbl);
+}
 function computeLocationHistoryStats(dates){
   const sorted=[...dates].sort();
   const debuts=[];
@@ -3961,6 +3969,7 @@ function computeLocationHistoryStats(dates){
 function renderVenueSummaryPanel(frag,venueEntry){
   const {sortedDates:dates,debuts,comebacks,toursThrough,totalViews,headyCount}=computeLocationHistoryStats(venueEntry.dates);
 
+  appendAtAGlanceLabel(frag);
   const panel=document.createElement("div");panel.className="tour-summary-panel";
   let html="";
   html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${dates.length}</div><div class="tour-summary-label">Show${dates.length===1?"":"s"}</div></div>`;
@@ -3988,6 +3997,7 @@ function renderPlaceSummaryPanel(frag,dates,placeLabel){
   const {sortedDates:sorted,debuts,comebacks,toursThrough,totalViews,headyCount}=computeLocationHistoryStats(dates);
   if(!sorted.length)return;
 
+  appendAtAGlanceLabel(frag);
   const panel=document.createElement("div");panel.className="tour-summary-panel";
   let html="";
   html+=`<div class="tour-summary-stat"><div class="tour-summary-num">${sorted.length}</div><div class="tour-summary-label">Show${sorted.length===1?"":"s"}</div></div>`;
@@ -4019,6 +4029,7 @@ function showSegueShows(pairEntry,backFn,crumbBase){
       const localDrumSpace=new Set(["Drums","Space"]);
       const rank=SEGUE_INDEX.filter(e=>!localDrumSpace.has(e.a)&&!localDrumSpace.has(e.b))
         .sort((a,b)=>b.count-a.count).findIndex(e=>e===pairEntry)+1;
+      appendAtAGlanceLabel(frag);
       const panel=document.createElement("div");panel.className="tour-summary-panel";
       let html=`<div class="tour-summary-stat"><div class="tour-summary-num">${pairEntry.count}</div><div class="tour-summary-label">Time${pairEntry.count===1?"":"s"}</div></div>`;
       if(rank>0)html+=`<div class="tour-summary-stat"><div class="tour-summary-num">#${rank}</div><div class="tour-summary-label">Most Common Segue</div></div>`;
@@ -4265,6 +4276,8 @@ function showSongDetail(songEntry){
   sub.append(`${perfCount} performance${perfCount===1?"":"s"}`);
   header.appendChild(sub);
   frag.appendChild(header);
+
+  if(first||last){appendAtAGlanceLabel(frag);}
 
   if(first){
     const debutLine=document.createElement("div");debutLine.className="map-detail-sub";
