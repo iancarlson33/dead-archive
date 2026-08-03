@@ -546,6 +546,7 @@ body {
 
 /* ── Map by State ── */
 .map-intro { padding:12px 16px; font-size:11px; color:var(--warm); line-height:1.6; background:var(--brown); }
+.map-notable-tag { font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:600; color:var(--gold); letter-spacing:0.3px; }
 .cartogram-wrap { padding:16px; background:var(--ink); border-bottom:1px solid var(--rule); }
 .cartogram { display:grid; grid-template-columns:repeat(11,1fr); grid-template-rows:repeat(8,1fr); gap:3px; aspect-ratio:11/7; }
 .tile {
@@ -3399,6 +3400,20 @@ function showMap(){
   const counts={};Object.keys(byState).forEach(st=>counts[st]=byState[st].length);
   const maxCount=Math.max(...Object.values(counts));
 
+  // Which states/countries contain one of the app's own curated Notable
+  // Shows -- ties the Map tab to Notable, which otherwise have zero
+  // connection to each other despite both being "browse by place/moment"
+  // features. Looked up via each show's real state/country rather than
+  // parsing NOTABLE_SHOWS' own display-only location text, so this can't
+  // drift out of sync with how byState/intl actually group things.
+  const notableStates=new Set(),notableCountries=new Set();
+  NOTABLE_SHOWS.forEach(s=>{
+    const show=getGDShow(s.date);
+    if(!show)return;
+    if(show.state)notableStates.add(show.state);
+    else if(show.country&&show.country!=="US")notableCountries.add(show.country);
+  });
+
   const frag=document.createDocumentFragment();
 
   const lbl1=document.createElement("div");lbl1.className="section-label";lbl1.textContent="— Browse by Place —";frag.appendChild(lbl1);
@@ -3427,9 +3442,12 @@ function showMap(){
   const stateList=document.createElement("div");stateList.className="show-list";
   Object.keys(byState).sort((a,b)=>(STATE_NAMES[a]||a).localeCompare(STATE_NAMES[b]||b)).forEach(st=>{
     const count=counts[st];
+    const years=byState[st].map(s=>s.date.slice(0,4)).sort();
+    const yearRange=years[0]===years[years.length-1]?years[0]:`${years[0]}\u2013${years[years.length-1]}`;
+    const notableTag=notableStates.has(st)?` <span class="map-notable-tag">\u2605 Notable</span>`:"";
     const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
     row.innerHTML=`<div class="state-swatch" style="background:${mapColorFor(count,maxCount)}"></div>
-      <div class="show-info-col"><div class="show-venue-name">${STATE_NAMES[st]||st}</div><div class="show-location">${count} show${count===1?"":"s"}</div></div>
+      <div class="show-info-col"><div class="show-venue-name">${STATE_NAMES[st]||st}${notableTag}</div><div class="show-location">${count} show${count===1?"":"s"} \u00b7 ${yearRange}</div></div>
       <div class="show-arrow">\u203a</div>`;
     row.addEventListener("click",()=>showStateShows(st,byState[st]));
     stateList.appendChild(row);
@@ -3440,9 +3458,12 @@ function showMap(){
     const lbl3=document.createElement("div");lbl3.className="section-label";lbl3.textContent="— International —";frag.appendChild(lbl3);
     const intlList=document.createElement("div");intlList.className="show-list";
     Object.entries(intl).sort((a,b)=>b[1].length-a[1].length).forEach(([country,shows])=>{
+      const years=shows.map(s=>s.date.slice(0,4)).sort();
+      const yearRange=years[0]===years[years.length-1]?years[0]:`${years[0]}\u2013${years[years.length-1]}`;
+      const notableTag=notableCountries.has(country)?` <span class="map-notable-tag">\u2605 Notable</span>`:"";
       const row=document.createElement("button");row.className="show-row";row.setAttribute("type","button");
       row.innerHTML=`<div class="state-swatch" style="background:${mapColorFor(shows.length,24)}"></div>
-        <div class="show-info-col"><div class="show-venue-name">${country}</div><div class="show-location">${shows.length} show${shows.length===1?"":"s"}</div></div>
+        <div class="show-info-col"><div class="show-venue-name">${country}${notableTag}</div><div class="show-location">${shows.length} show${shows.length===1?"":"s"} \u00b7 ${yearRange}</div></div>
         <div class="show-arrow">\u203a</div>`;
       row.addEventListener("click",()=>showCountryShows(country,shows));
       intlList.appendChild(row);
