@@ -1329,7 +1329,8 @@ body {
 }
 .viz-row { height:24px;display:flex;align-items:flex-end;gap:2px;margin-bottom:6px; }
 .viz-bar { flex:1;background:var(--red);min-height:2px;opacity:0.4;transition:height 0.09s ease; }
-.player-now { display:flex;align-items:flex-start;gap:10px;margin-bottom:6px; }
+.player-now { display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;cursor:pointer;border-radius:4px;transition:background 0.15s; }
+.player-now:hover, .player-now:focus-visible { background:rgba(200,150,10,0.08); outline:none; }
 .player-text { flex:1;min-width:0; }
 .player-track { font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2; }
 .player-show { font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--warm);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
@@ -1726,7 +1727,7 @@ audio { display:none; }
 
 <div class="player" id="player" style="display:none" role="region" aria-label="Audio player">
   <div class="viz-row" id="vizRow" aria-hidden="true"></div>
-  <div class="player-now">
+  <div class="player-now" id="playerNow">
     <div class="player-text">
       <div class="player-track" id="playerTrack" aria-live="polite">—</div>
       <div class="player-show" id="playerShow">—</div>
@@ -1778,6 +1779,70 @@ const RELEASES  = {};
 const HEADY     = {};
 const HEADY_SONGS = {}; // song name -> {id, url, versions:[{date,venue,votes,description}]} -- retains the full data for search, since HEADY above only keeps a flattened date-keyed view
 const HEADY_SONGS_NORM = {}; // normalizeSongTitle(name) -> {name, id, url, versions} -- excludes segue-pair keys ("A -> B"), used for song-detail heady lookups
+// Some songs are spelled differently between the setlist data (gdshowsdb)
+// and the heady-rankings data (headyversion.com's own scrape) -- same song,
+// different punctuation/wording. Each pair below was checked individually
+// against real Grateful Dead performance history; songs where the "closest"
+// match could plausibly be a genuinely different song (or a different era's
+// arrangement, e.g. the Minglewood Blues title evolved over decades, and
+// Weather Report Suite is tracked as separate movements in our setlist
+// data) were deliberately left unmapped rather than guessed.
+const SONG_ALIASES=[
+  ["Man Smart (Woman Smarter)","Man Smart, Woman Smarter"],
+  ["Born Cross-Eyed","Born Cross Eyed"],
+  ["C.C. Rider","C. C. Rider"],
+  ["The Days Between","Days Between"],
+  ["How Sweet It Is (To Be Loved By You)","How Sweet It Is"],
+  ["Jack-A-Roe","Jack A Roe"],
+  ["The Last Time","Last Time"],
+  ["Oh Babe, It Ain't No Lie","Oh Babe It Ain't No Lie"],
+  ["(I'm A) Road Runner","Road Runner"],
+  ["Swing Low, Sweet Chariot","Swing Low Sweet Chariot"],
+  ["Frozen Logger","The Frozen Logger"],
+  ["U.S. Blues","U.S. Blues (Wave That Flag)"],
+  ["Tons Of Steel","100000 Tons of Steel"],
+  ["Iko Iko","Aiko Aiko"],
+  ["And We Bid You Good Night","And We Bid You Goodnight"],
+  ["My Brother Esau","Brother Esau"],
+  ["Darkness, Darkness Jam","Darkness Jam"],
+  ["Devil With The Blue Dress","Devil With The Blue Dress On"],
+  ["Don't Think Twice It's Alright","Don't Think Twice"],
+  ["I Got My Mojo Workin'","Got My Mojo Working"],
+  ["Hey Jude Reprise","Hey Jude Finale"],
+  ["Hi-Heel Sneakers","High Heeled Sneakers"],
+  ["I Just Want To Make Love To You","I Just Wanna Make Love To You"],
+  ["Hog For You Baby","I'm A Hog For You"],
+  ["It's All Over Now","Its All Over Now"],
+  ["I'm A King Bee","King Bee"],
+  ["Louie Louie","Louie"],
+  ["Mississippi Half Step","Mississippi Halfstep Uptown Toodeloo"],
+  ["Mr. Charlie","Mister Charlie"],
+  ["Okie From Muskogee","Oakie From Muskogee"],
+  ["Quinn The Eskimo","Quin The Eskimo"],
+  ["Quinn The Eskimo","The Mighty Quinn (Quinn The Eskimo)"],
+  ["Rosa Lee McFall","Rosalie McFall"],
+  ["Reuben And Cherise","Rubin and Cherise"],
+  ["Run Rudolph Run","Run Run Rudolph"],
+  ["Far From Me","So Far From Me"],
+  ["Saint Stephen","St. Stephen"],
+  ["That's Alright Mama","That's All Right"],
+  ["Golden Road To Unlimited Devotion","The Golden Road (to unlimited devotion)"],
+  ["Turn On Your Lovelight","Turn On Your Love Light"],
+  ["You Ain't Woman Enough","You Ain't Woman Enough To Take My Man"],
+  ["Young Blood","Youngblood"],
+  ["Peggy-O","Pretty Peggy O"]
+];
+const SONG_ALIAS_LOOKUP={};
+SONG_ALIASES.forEach(([setlistName,headyName])=>{SONG_ALIAS_LOOKUP[normalizeSongTitle(setlistName)]=headyName;});
+// The one shared place a song name resolves to its heady-rankings entry --
+// tries the direct normalized match first (the common case), then falls
+// back to the alias map above for the known spelling mismatches.
+function getHeadyEntryForSong(songName){
+  const direct=HEADY_SONGS_NORM[normalizeSongTitle(songName)];
+  if(direct)return direct;
+  const alias=SONG_ALIAS_LOOKUP[normalizeSongTitle(songName)];
+  return alias?HEADY_SONGS_NORM[normalizeSongTitle(alias)]:null;
+}
 const SETLISTS  = {};
 const GDSHOWS   = {};
 const REDDIT    = {};
@@ -2027,6 +2092,16 @@ const timeDuration  = document.getElementById("timeDuration");
 const playerTrack   = document.getElementById("playerTrack");
 const playerShow    = document.getElementById("playerShow");
 const playerBadge   = document.getElementById("playerBadge");
+const playerNow     = document.getElementById("playerNow");
+playerNow.setAttribute("role","button");playerNow.setAttribute("tabindex","0");
+playerNow.setAttribute("aria-label","Jump to the currently playing show");
+playerNow.addEventListener("click",()=>{
+  if(!nowPlayingShow)return;
+  loadShowByIdentifier({identifier:nowPlayingShow.identifier,venue:nowPlayingShow.venue,date:nowPlayingShow.date});
+});
+playerNow.addEventListener("keydown",e=>{
+  if((e.key==="Enter"||e.key===" ")&&nowPlayingShow){e.preventDefault();loadShowByIdentifier({identifier:nowPlayingShow.identifier,venue:nowPlayingShow.venue,date:nowPlayingShow.date});}
+});
 const audio         = document.getElementById("audio");
 const vizRow        = document.getElementById("vizRow");
 const recentTray    = document.getElementById("recentTray");
@@ -2047,6 +2122,11 @@ setInterval(()=>vizBars.forEach(b=>{
 
 // ── State ──
 let shows=[], activeShow=null, activeIdentifier=null, altRecordings=[], tracks=[], currentIdx=-1;
+// A snapshot of whichever show is actually playing right now, captured the
+// moment a track starts (see playTrack) -- kept separate from activeShow,
+// which just tracks whatever page happens to be open and can point at a
+// completely different show once you've navigated away from what's playing.
+let nowPlayingShow=null;
 let currentTab="years", currentYear=null, sourceFilter="all", favSubView="favorites", browseFacet="year", songVocalFilter="all", segueSortMode="frequency";
 let recentShows = JSON.parse(localStorage.getItem("da_recent")||"[]");
 let favorites = JSON.parse(localStorage.getItem("da_favorites")||"[]");
@@ -4390,8 +4470,7 @@ function showSongDetail(songEntry){
   }
 
   // Top heady versions
-  const headyKey=normalizeSongTitle(songEntry.name);
-  const headyEntry=HEADY_SONGS_NORM[headyKey];
+  const headyEntry=getHeadyEntryForSong(songEntry.name);
   if(headyEntry&&headyEntry.versions&&headyEntry.versions.length){
     const lbl=document.createElement("div");lbl.className="section-label";lbl.textContent="\u2014 Top Heady Versions \u2014";frag.appendChild(lbl);
     const list=document.createElement("div");list.className="show-list";
@@ -5489,6 +5568,7 @@ function playTrack(idx){
   attemptPlay(false);
   playerTrack.textContent=tracks[idx].name;
   playerShow.textContent=(activeShow?.venue||activeShow?.title||"")+" · "+(activeShow?.date||"");
+  nowPlayingShow={identifier:activeIdentifier,venue:activeShow?.venue,date:activeShow?.date,coverage:activeShow?.coverage};
   const rel=getReleases(isoDate(activeShow?.date));
   if(rel[0]){playerBadge.textContent=rel[0].title;playerBadge.style.display="block";}
   else playerBadge.style.display="none";
