@@ -1077,13 +1077,14 @@ body {
 .program-meta-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px; }
 .program-info-strip {
   display:flex; flex-wrap:wrap; gap:14px; padding:10px 16px;
-  background:rgba(0,0,0,0.15); border-top:1px solid rgba(255,255,255,0.08);
+  background:var(--ink); border-top:1px solid rgba(255,255,255,0.08);
   font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream);
 }
 .info-strip-item { white-space:nowrap; }
 .info-strip-label { color:var(--warm); margin-right:3px; }
 .info-strip-link { color:var(--gold); text-decoration:none; }
 .info-strip-link:hover { text-decoration:underline; }
+.info-strip-jump { border:none; background:none; font-family:inherit; font-size:inherit; cursor:pointer; padding:0; }
 .meta-label {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 8px;
@@ -5144,6 +5145,16 @@ function renderProgramHeader(doc,extra,targetEl){
   if(viewRec)stripHTML+=`<span class="info-strip-item"><span class="info-strip-label">All-Time Plays</span> ${viewRec.all_time.toLocaleString()}</span>`;
   stripHTML+=`<a class="info-strip-item info-strip-link" href="https://archive.org/details/${doc.identifier||""}" target="_blank" rel="noopener">View on archive.org →</a>`;
   infoStrip.innerHTML=stripHTML;
+  // A direct way to skip past the (often long) setlist straight to the
+  // playable tracks, since with the setlist now always visible above it,
+  // Tracks can be a real scroll away and easy to miss.
+  const jumpBtn=document.createElement("button");jumpBtn.type="button";
+  jumpBtn.className="info-strip-item info-strip-link info-strip-jump";
+  jumpBtn.textContent="↓ Jump to tracks";
+  jumpBtn.addEventListener("click",()=>{
+    document.getElementById("setlistBlock")?.scrollIntoView({behavior:"smooth",block:"start"});
+  });
+  infoStrip.appendChild(jumpBtn);
   header.appendChild(infoStrip);
 
   if(targetEl){targetEl.innerHTML="";targetEl.appendChild(header);}
