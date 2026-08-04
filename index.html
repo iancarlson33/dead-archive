@@ -1075,6 +1075,15 @@ body {
 .show-info-panel.open { display:block; }
 
 .program-meta-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px; }
+.program-info-strip {
+  display:flex; flex-wrap:wrap; gap:14px; padding:10px 16px;
+  background:rgba(0,0,0,0.15); border-top:1px solid rgba(255,255,255,0.08);
+  font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream);
+}
+.info-strip-item { white-space:nowrap; }
+.info-strip-label { color:var(--warm); margin-right:3px; }
+.info-strip-link { color:var(--gold); text-decoration:none; }
+.info-strip-link:hover { text-decoration:underline; }
 .meta-label {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 8px;
@@ -1103,7 +1112,13 @@ body {
 .visual-setlist { background:var(--ink);border-bottom:2px solid var(--gold); }
 .visual-setlist-panel { display:none;padding:0 0 12px; }
 .visual-setlist-panel.open { display:block; }
+.visual-setlist-label-static {
+  width:100%; background:#2E5A78; padding:12px 16px; color:var(--cream);
+  font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:700;
+  letter-spacing:2px; text-transform:uppercase;
+}
 .visual-set-block { padding:0 16px;margin-top:10px; }
+.visual-set-block.is-encore { margin-top:16px; }
 .visual-set-name {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 8px;
@@ -1114,6 +1129,13 @@ body {
   margin-bottom: 6px;
   padding-bottom: 4px;
   border-bottom: 1px solid rgba(200,150,10,0.25);
+}
+.visual-set-name-encore {
+  font-size: 7px;
+  font-weight: 400;
+  letter-spacing: 2px;
+  color: var(--warm);
+  border-bottom: 1px dotted rgba(168,152,112,0.3);
 }
 .visual-song-row {
   display: flex;
@@ -2032,6 +2054,22 @@ function segueStartingWith(songName){
   return SEGUE_INDEX.filter(e=>normalizeSongTitle(e.a)===key).sort((a,b)=>b.count-a.count);
 }
 function fmtTime(s){if(!s||isNaN(s))return"0:00";return Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0")}
+// archive.org's per-file "length" metadata comes back in two different
+// shapes depending on the recording -- sometimes a plain seconds count
+// ("462.32"), sometimes already formatted as M:SS or H:MM:SS ("7:42").
+// parseFloat() alone silently mishandles the second case: parseFloat("7:42")
+// is just 7, which then renders as "0:07" instead of the real 7:42.
+function parseDuration(raw){
+  if(!raw)return 0;
+  const s=String(raw).trim();
+  if(s.includes(":")){
+    const parts=s.split(":").map(Number);
+    if(parts.some(isNaN))return 0;
+    return parts.reduce((acc,p)=>acc*60+p,0);
+  }
+  const n=parseFloat(s);
+  return isNaN(n)?0:n;
+}
 
 function cleanName(n){
   return n.replace(/\.(mp3|ogg|flac|shn)$/i,"")
@@ -5096,43 +5134,18 @@ function renderProgramHeader(doc,extra,targetEl){
   topRow.appendChild(dateBlock);topRow.appendChild(infoBlock);
   header.appendChild(topRow);
 
-  // Accordion: show more info
-  const toggle=document.createElement("button");toggle.className="show-info-toggle";toggle.setAttribute("aria-expanded","false");
-  toggle.innerHTML='<span>Show info</span><span class="toggle-arrow">▾</span>';
-  const panel=document.createElement("div");panel.className="show-info-panel";
+  // Compact, always-visible facts strip -- replaces the old "Show info"
+  // accordion. This is deliberately short (runtime/source/archive link/play
+  // count), so there's no real reason to make someone tap to reveal it.
+  const infoStrip=document.createElement("div");infoStrip.className="program-info-strip";
+  let stripHTML="";
+  stripHTML+=`<span class="info-strip-item"><span class="info-strip-label">Runtime</span> <span class="info-runtime">${runtime||"—"}</span></span>`;
+  stripHTML+=`<span class="info-strip-item"><span class="info-strip-label">Source</span> <span class="info-source">${src?sourceLabel(src):"—"}</span></span>`;
+  if(viewRec)stripHTML+=`<span class="info-strip-item"><span class="info-strip-label">All-Time Plays</span> ${viewRec.all_time.toLocaleString()}</span>`;
+  stripHTML+=`<a class="info-strip-item info-strip-link" href="https://archive.org/details/${doc.identifier||""}" target="_blank" rel="noopener">View on archive.org →</a>`;
+  infoStrip.innerHTML=stripHTML;
+  header.appendChild(infoStrip);
 
-  // Meta grid
-  let panelHTML=`<div class="program-meta-grid">`;
-  panelHTML+=`<div><div class="meta-label">Runtime</div><div class="meta-value info-runtime">${runtime||"—"}</div></div>`;
-  panelHTML+=`<div><div class="meta-label">Source</div><div class="meta-value hi info-source">${src?sourceLabel(src):"—"}</div></div>`;
-  panelHTML+=`<div><div class="meta-label">Archive</div><div class="meta-value"><a href="https://archive.org/details/${doc.identifier||""}" target="_blank" rel="noopener">View →</a></div></div>`;
-  if(viewRec){panelHTML+=`<div><div class="meta-label">All-Time Plays</div><div class="meta-value">${viewRec.all_time.toLocaleString()}</div></div>`;}
-  panelHTML+=`</div>`;
-
-  if(releases.length){
-    panelHTML+=`<div class="program-releases">`;
-    releases.forEach(rel=>{
-      panelHTML+=`<div class="rel-row">`;
-      if(rel.artwork)panelHTML+=`<img class="rel-thumb" src="${rel.artwork}" alt="${rel.title}" loading="lazy">`;
-      panelHTML+=`<div><div class="rel-name">${rel.title}</div><div class="rel-type">${rel.label}</div></div></div>`;
-    });
-    panelHTML+=`</div>`;
-  }
-
-
-
-
-  panel.innerHTML=panelHTML;
-
-  toggle.addEventListener("click",()=>{
-    const open=panel.classList.toggle("open");
-    toggle.setAttribute("aria-expanded",open?"true":"false");
-    toggle.querySelector(".toggle-arrow").textContent=open?"▴":"▾";
-    toggle.querySelector("span").textContent=open?"Hide info":"Show info";
-  });
-
-  header.appendChild(toggle);
-  header.appendChild(panel);
   if(targetEl){targetEl.innerHTML="";targetEl.appendChild(header);}
   else{mainEl.appendChild(header);}
   header.scrollIntoView({behavior:"smooth",block:"start"});
@@ -5271,29 +5284,22 @@ function renderVisualSetlist(doc) {
   let songCount = 0;
   gdshow.sets.forEach(set => songCount += set.songs.length);
 
-  const toggle = document.createElement("button");
-  toggle.className = "show-info-toggle setlist-toggle visual-setlist-label";
-  toggle.type = "button";
-  toggle.setAttribute("aria-expanded", "false");
-  toggle.innerHTML = `<span>Setlist (${songCount} song${songCount===1?"":"s"})</span><span class="toggle-arrow">▾</span>`;
-  wrap.appendChild(toggle);
+  const label = document.createElement("div");
+  label.className = "visual-setlist-label-static";
+  label.textContent = `Setlist (${songCount} song${songCount===1?"":"s"})`;
+  wrap.appendChild(label);
 
   const panel = document.createElement("div");
-  panel.className = "visual-setlist-panel";
+  panel.className = "visual-setlist-panel open";
   wrap.appendChild(panel);
-
-  toggle.addEventListener("click", () => {
-    const open = panel.classList.toggle("open");
-    toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    toggle.querySelector(".toggle-arrow").textContent = open ? "▴" : "▾";
-  });
 
   gdshow.sets.forEach(set => {
     const block = document.createElement("div");
-    block.className = "visual-set-block";
+    const isEncore = /encore/i.test(set.label);
+    block.className = "visual-set-block" + (isEncore ? " is-encore" : "");
 
     const setName = document.createElement("div");
-    setName.className = "visual-set-name";
+    setName.className = "visual-set-name" + (isEncore ? " visual-set-name-encore" : "");
     setName.textContent = set.label;
     block.appendChild(setName);
 
@@ -5420,19 +5426,11 @@ function buildSetlist(doc){
   const showDate=isoDate(doc.date);
   const headyPicks=getHeady(showDate);
 
-  // Accordion toggle, matching the Show Info pattern. Tracks section starts open by default
-  // (unlike Setlist/Show Info, which start closed) since playing audio is this app's core action.
-  const toggle=document.createElement("button");toggle.className="show-info-toggle tracks-toggle";toggle.setAttribute("type","button");toggle.setAttribute("aria-expanded","true");
-  toggle.innerHTML=`<span>Tracks (${tracks.length})</span><span class="toggle-arrow">▴</span>`;
+  const label=document.createElement("div");label.className="visual-setlist-label-static";
+  label.textContent=`Tracks (${tracks.length})`;
   const panel=document.createElement("div");panel.className="show-info-panel setlist-panel open";
 
-  toggle.addEventListener("click",()=>{
-    const open=panel.classList.toggle("open");
-    toggle.setAttribute("aria-expanded",open?"true":"false");
-    toggle.querySelector(".toggle-arrow").textContent=open?"▴":"▾";
-  });
-
-  section.appendChild(toggle);
+  section.appendChild(label);
   section.appendChild(panel);
 
   // Build set break map and segue map from gdshowsdb.
@@ -5531,7 +5529,7 @@ function buildSetlist(doc){
     bodyEl.appendChild(nameEl);
     if(heady){const h=document.createElement("div");h.className="track-heady";h.textContent="🔥 #"+heady.rank+" rated · Heady Version";bodyEl.appendChild(h);}
 
-    const durEl=document.createElement("span");durEl.className="track-dur";durEl.textContent=t.duration?fmtTime(parseFloat(t.duration)):"";
+    const durEl=document.createElement("span");durEl.className="track-dur";durEl.textContent=t.duration?fmtTime(parseDuration(t.duration)):"";
     const playEl=document.createElement("div");playEl.className="track-play";playEl.textContent="▶";
     row.appendChild(numEl);row.appendChild(bodyEl);row.appendChild(durEl);row.appendChild(playEl);
     row.addEventListener("click",()=>playTrack(i));
