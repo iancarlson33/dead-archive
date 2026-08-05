@@ -900,9 +900,15 @@ body {
 
 /* ── SHOW BANNER — poster headline section ── */
 .show-banner {
-  background: var(--blue);
+  background: linear-gradient(180deg, #7CB8DC 0%, #2A5C7C 56%, #1C3E52 100%);
   border-bottom: 3px solid var(--gold);
   padding: 10px 16px;
+  position: relative;
+}
+.banner-skull-icon {
+  position: absolute; top: 10px; right: 14px; width: 34px; height: 34px;
+  background-size: contain; background-repeat: no-repeat; background-position: center;
+  opacity: 0.35; pointer-events: none;
 }
 
 .program-back {
@@ -5068,6 +5074,13 @@ function renderProgramHeader(doc,extra,targetEl){
   const header=document.createElement("div");
   header.className="show-banner";
   if(!targetEl) header.id="programHeader";
+
+  const skullUri=getSkullDataUri();
+  if(skullUri){
+    const skullIcon=document.createElement("div");skullIcon.className="banner-skull-icon";
+    skullIcon.style.backgroundImage=`url(${skullUri})`;
+    header.appendChild(skullIcon);
+  }
 
   // Back button
   const back=document.createElement("button");back.className="program-back";back.setAttribute("aria-label","Back to show list");
