@@ -1885,6 +1885,18 @@ function getHeadyEntryForSong(songName){
   const alias=SONG_ALIAS_LOOKUP[normalizeSongTitle(songName)];
   return alias?HEADY_SONGS_NORM[normalizeSongTitle(alias)]:null;
 }
+// headyMatch() alone misses known spelling differences between the heady
+// database and the official setlist data (e.g. "Man Smart, Woman Smarter"
+// vs "Man Smart (Woman Smarter)") -- this was already solved for the song
+// detail page via the alias table, but the per-show setlist and tracks
+// sections were still using bare headyMatch() with no knowledge of it,
+// silently missing a badge anywhere a song's title differs between the
+// two datasets.
+function headyMatchAliasAware(headySongName,setlistSongName){
+  if(headyMatch(headySongName,setlistSongName))return true;
+  const alias=SONG_ALIAS_LOOKUP[normalizeSongTitle(setlistSongName)];
+  return alias?normalizeSongTitle(alias)===normalizeSongTitle(headySongName):false;
+}
 const SETLISTS  = {};
 const GDSHOWS   = {};
 const REDDIT    = {};
@@ -5367,7 +5379,7 @@ function renderVisualSetlist(doc) {
     let songNum = 1;
     set.songs.forEach((song, i) => {
       // Heady match
-      const h = heady.find(hh => headyMatch(hh.song, song.name));
+      const h = heady.find(hh => headyMatchAliasAware(hh.song, song.name));
       const jb = getJerrybaseSong(song.name);
 
       const row = document.createElement("div");
@@ -5575,7 +5587,7 @@ function buildSetlist(doc){
 
     const row=document.createElement("button");row.className="track-row";row.setAttribute("type","button");row.id="tn-"+i;
 
-    const heady=headyPicks.find(h=>headyMatch(h.song,t.name));
+    const heady=headyPicks.find(h=>headyMatchAliasAware(h.song,t.name));
 
     const numEl=document.createElement("span");numEl.className="track-num";numEl.textContent=i+1;
     const bodyEl=document.createElement("div");bodyEl.className="track-body";
