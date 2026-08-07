@@ -132,6 +132,10 @@ body {
   letter-spacing: 1px;
 }
 .icon-btn:hover { border-color:var(--gold);color:var(--gold); }
+#standaloneBackBtn {
+  width:28px; height:28px; padding:0; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0;
+}
 
 .search-row { display:flex;padding:8px 16px;gap:0; }
 
@@ -971,7 +975,7 @@ body {
   opacity: 0.6;
 }
 
-.show-banner-info { flex:1;min-width:0; }
+.show-banner-info { flex:1;min-width:0;padding-right:44px; }
 .show-banner-venue {
   font-family: 'Playfair Display', serif;
   font-size: 20px;
@@ -1733,6 +1737,7 @@ audio { display:none; }
 
 <header class="site-header" role="banner">
   <div class="header-top">
+    <button class="icon-btn" id="standaloneBackBtn" aria-label="Go back" style="display:none">←</button>
     <button class="site-title" id="siteTitleBtn" type="button" aria-label="Back to landing page">Dead Archive</button>
     <div class="header-actions">
       <button class="icon-btn" id="shareBtn" aria-label="Share this show" style="display:none">Share</button>
@@ -2656,7 +2661,29 @@ function setBreadcrumb(parts){
 // clone reliably, and which wouldn't survive a real page reload anyway).
 let _restoringHistory=false;
 let _hasPushedInitialView=false;
-const _initialHistoryLength=history.length;
+let _navDepth=0;
+// iOS strips out its entire browser chrome in standalone/home-screen mode --
+// no address bar, no back button, and critically no edge-swipe-back
+// gesture, since that belongs to Safari's own UI, not the page. This is
+// the one thing a website genuinely cannot recreate via JS, so instead we
+// make sure there's always an obvious, persistent tap target to go back,
+// visible only when running standalone (a normal browser tab already has
+// its own back button/gesture, so this would just be redundant there).
+const _isStandalone=window.navigator.standalone===true||window.matchMedia("(display-mode: standalone)").matches;
+const standaloneBackBtn=document.getElementById("standaloneBackBtn");
+function updateStandaloneBackBtn(){
+  if(!_isStandalone){standaloneBackBtn.style.display="none";return;}
+  const depth=history.state&&history.state._navIndex;
+  standaloneBackBtn.style.display=(depth>0)?"flex":"none";
+}
+if(_isStandalone){
+  standaloneBackBtn.addEventListener("click",()=>{
+    const depth=history.state&&history.state._navIndex;
+    if(depth>0)history.back();
+  });
+  window.addEventListener("popstate",updateStandaloneBackBtn);
+  document.addEventListener("DOMContentLoaded",updateStandaloneBackBtn);
+}
 function activateTab(name){
   document.querySelectorAll(".nav-tab").forEach(t=>{
     const isActive=t.dataset.tab===name;
@@ -2667,12 +2694,14 @@ function activateTab(name){
 }
 function pushView(view,params){
   if(_restoringHistory)return;
-  const state=Object.assign({view},params);
+  if(_hasPushedInitialView)_navDepth++;
+  const state=Object.assign({view,_navIndex:_navDepth},params);
   const url=view==="show"?(location.pathname+"?show="+encodeURIComponent(params.identifier)):location.pathname;
   try{
     if(!_hasPushedInitialView){history.replaceState(state,"",url);_hasPushedInitialView=true;}
     else history.pushState(state,"",url);
   }catch(e){}
+  if(_isStandalone)updateStandaloneBackBtn();
 }
 // Regenerates the same {date,venue,city,state|country} arrays showMap()
 // builds inline, so a restored state/country view doesn't depend on a
