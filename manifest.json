@@ -3,6 +3,7 @@
   "short_name": "Dead Archive",
   "description": "Grateful Dead show archive and player",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#1A120A",
   "theme_color": "#1A120A",
