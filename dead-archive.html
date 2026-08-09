@@ -356,9 +356,10 @@ body {
    unexplained silhouette floating in the background. */
 .postcard-stamp-frame {
   position:absolute; top:50%; right:10px; transform:translateY(-50%) rotate(-5deg); z-index:-1;
-  height:70%; padding:4px; border:1px dashed rgba(200,150,10,0.3); pointer-events:none;
+  height:70%; width:90px; padding:4px; border:1px dashed rgba(200,150,10,0.3); pointer-events:none;
+  box-sizing:border-box;
 }
-.postcard-state-outline { height:100%; width:auto; display:block; }
+.postcard-state-outline { height:100%; width:100%; display:block; }
 .postcard-state-outline path { fill:var(--gold); opacity:0.16; }
 .postcard-venue { font-family:'Playfair Display',serif; font-weight:700; font-size:15px; color:var(--cream); line-height:1.25; }
 .postcard-city { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--warm); }
