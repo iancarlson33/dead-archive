@@ -2674,7 +2674,7 @@ function setBreadcrumb(parts){
 // clone reliably, and which wouldn't survive a real page reload anyway).
 let _restoringHistory=false;
 let _hasPushedInitialView=false;
-let _navDepth=0;
+let _navDepth=parseInt(sessionStorage.getItem("_navDepth")||"0",10)||0;
 // iOS strips out its entire browser chrome in standalone/home-screen mode --
 // no address bar, no back button, and critically no edge-swipe-back
 // gesture, since that belongs to Safari's own UI, not the page. This is
@@ -2708,6 +2708,7 @@ function activateTab(name){
 function pushView(view,params){
   if(_restoringHistory)return;
   if(_hasPushedInitialView)_navDepth++;
+  sessionStorage.setItem("_navDepth",String(_navDepth));
   const state=Object.assign({view,_navIndex:_navDepth},params);
   const url=view==="show"?(location.pathname+"?show="+encodeURIComponent(params.identifier)):location.pathname;
   try{
@@ -2744,6 +2745,10 @@ function getReleaseByTitle(title){
 }
 function restoreView(state){
   _restoringHistory=true;
+  if(state&&typeof state._navIndex==="number"){
+    _navDepth=state._navIndex;
+    sessionStorage.setItem("_navDepth",String(_navDepth));
+  }
   try{
     if(!state||!state.view){activateTab("years");showYearGrid();return;}
     switch(state.view){
