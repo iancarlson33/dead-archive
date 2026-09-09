@@ -1083,6 +1083,10 @@ body {
 .tracks-toggle:hover { background:#7D5700; }
 .setlist-panel.setlist-panel { padding:0; background:none; border-bottom:none; }
 .reviews-panel.reviews-panel { padding:0; background:var(--ink); }
+.review-summary-box { padding:12px 16px; background:var(--ink); border-bottom:1px solid rgba(200,150,10,0.25); }
+.review-summary-label { font-family:'IBM Plex Mono',monospace; font-size:9px; font-weight:600; letter-spacing:1.5px; color:var(--warm); text-transform:uppercase; margin-bottom:6px; }
+.review-summary-line { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream); line-height:1.7; }
+.review-summary-line.review-summary-flag { color:#E0A030; }
 .review-row { padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.06); }
 .review-row:last-child { border-bottom:none; }
 .review-meta { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin-bottom:4px; }
@@ -1815,6 +1819,8 @@ audio { display:none; }
 
 <div class="share-toast" id="shareToast">Link copied to clipboard</div>
 <audio id="audio" crossorigin="anonymous"></audio>
+<audio id="audio2" crossorigin="anonymous"></audio>
+<audio id="audioGty" crossorigin="anonymous"></audio>
 
 <script>
 // ── Data ──
@@ -2173,7 +2179,17 @@ playerNow.addEventListener("click",()=>{
 playerNow.addEventListener("keydown",e=>{
   if((e.key==="Enter"||e.key===" ")&&nowPlayingShow){e.preventDefault();loadShowByIdentifier({identifier:nowPlayingShow.identifier,venue:nowPlayingShow.venue,date:nowPlayingShow.date});}
 });
-const audio         = document.getElementById("audio");
+const audioA         = document.getElementById("audio");
+const audioB         = document.getElementById("audio2");
+const audioGty       = document.getElementById("audioGty");
+let activeAudio      = audioA;
+function getStandbyAudio(){ return activeAudio===audioA?audioB:audioA; }
+// Kept as a getter-like reference for readability at call sites below --
+// always resolves to whichever element is currently in control.
+const audio          = new Proxy({},{
+  get(_,prop){ const v=activeAudio[prop]; return typeof v==="function"?v.bind(activeAudio):v; },
+  set(_,prop,val){ activeAudio[prop]=val; return true; }
+});
 const vizRow        = document.getElementById("vizRow");
 const recentTray    = document.getElementById("recentTray");
 const recentList    = document.getElementById("recentList");
@@ -3260,10 +3276,10 @@ function renderGtyRound(){
 }
 
 function playGtyClip(){
-  audio.pause();
-  audio.src=gtyState.url;
-  audio.currentTime=0;
-  audio.play().catch(()=>{});
+  audioGty.pause();
+  audioGty.src=gtyState.url;
+  audioGty.currentTime=0;
+  audioGty.play().catch(()=>{});
   document.getElementById("gtyPlayBtn").style.display="none";
   const progressEl=document.getElementById("gtyProgress");
   progressEl.style.display="flex";
@@ -3283,7 +3299,7 @@ function playGtyClip(){
 
 function stopGtyClip(){
   if(gtyState?.timer){clearInterval(gtyState.timer);gtyState.timer=null;}
-  audio.pause();
+  audioGty.pause();
 }
 
 function submitGtyGuess(){
@@ -5057,6 +5073,7 @@ async function loadShow(idx){
   const vs=renderVisualSetlist(doc);
   if(vs){slotSetlist.innerHTML="";slotSetlist.appendChild(vs);}
 
+  let primaryReviews=[];
   try{
     // Fetch metadata — critical
     const metaRes=await fetch("https://archive.org/metadata/"+doc.identifier);
@@ -5090,7 +5107,8 @@ async function loadShow(idx){
       renderSetlistInto(doc,slotTracks);
     }
 
-    renderReviewsInto(meta.reviews||[],slotReviews);
+    primaryReviews=meta.reviews||[];
+    renderReviewsInto(primaryReviews,slotReviews);
 
     saveRecent(doc);
   }catch(e){
@@ -5108,6 +5126,8 @@ async function loadShow(idx){
       if(altRecordings.length>0)renderRecordingSwitcherInto(doc,altRecordings,slotRec);
     }
   }catch(e){console.warn("Alt recordings:",e);}
+
+  buildAndRenderReviewSummary(primaryReviews,doc,altRecordings,slotReviews);
 }
 
 // ── PROGRAM HEADER ──
@@ -5284,6 +5304,114 @@ function renderReviewsInto(reviews,targetEl){
   section.appendChild(toggle);
   section.appendChild(panel);
   targetEl.appendChild(section);
+}
+
+// ── REVIEW SUMMARY ──
+// A count/frequency-based summary across all reviews for a show -- never
+// reproduces review text (that would risk quoting beyond fair use), only
+// aggregate statistics: how many reviews flag audio quality concerns, which
+// songs from that night's actual setlist come up most often, and the
+// average rating. Suppressed entirely below MIN_REVIEWS_FOR_SUMMARY, since
+// a "summary" of 1-2 reviews isn't meaningfully different from just reading
+// them directly.
+const MIN_REVIEWS_FOR_SUMMARY=3;
+const AUDIO_ISSUE_KEYWORDS=[
+  "hiss","muddy","distortion","distorted","dropout","drop out","drops out","cuts out","cutting out",
+  "skips","tape flip","warble","wow and flutter","hum","static","clipping","vocals buried","vocals low",
+  "poor quality","bad transfer","generation loss","noisy","garbled","low volume","unlistenable","harsh"
+];
+// Deliberately conservative: only shorthand distinctive enough to be safe.
+// Common-word shortenings that would false-positive in ordinary review text
+// (Fire from "Fire On The Mountain", Eyes from "Eyes Of The World", Dew from
+// "Morning Dew", Rider from "I Know You Rider") are intentionally excluded.
+const SONG_NICKNAMES={
+  "Scarlet Begonias":["Scarlet"],
+  "China Cat Sunflower":["China Cat"],
+  "Terrapin Station":["Terrapin"],
+  "Uncle John's Band":["Uncle John's"],
+  "Estimated Prophet":["Estimated"],
+  "Franklin's Tower":["Franklin's"],
+  "Sugar Magnolia":["Sugar Mag"],
+  "Not Fade Away":["NFA"],
+  "Brokedown Palace":["Brokedown"],
+  "Ramble On Rose":["Ramble On"],
+  "New Speedway Boogie":["Speedway"],
+  "Mississippi Half-Step Uptown Toodeloo":["Half-Step","Mississippi Half-Step"],
+  "Weather Report Suite":["Weather Report"]
+};
+function analyzeReviews(reviews,gdshow){
+  if(!reviews||reviews.length<MIN_REVIEWS_FOR_SUMMARY)return null;
+
+  const ratings=reviews.map(r=>parseInt(r.stars,10)).filter(n=>n>0);
+  const avgRating=ratings.length?(ratings.reduce((a,b)=>a+b,0)/ratings.length):null;
+
+  let audioIssueCount=0;
+  reviews.forEach(r=>{
+    const text=((r.reviewtitle||"")+" "+(r.reviewbody||"")).toLowerCase();
+    if(AUDIO_ISSUE_KEYWORDS.some(kw=>text.includes(kw)))audioIssueCount++;
+  });
+
+  const songCounts={};
+  if(gdshow){
+    const songNames=new Set();
+    gdshow.sets.forEach(s=>s.songs.forEach(sg=>songNames.add(sg.name)));
+    songNames.forEach(name=>{
+      const nameLower=name.toLowerCase();
+      if(nameLower.length<4)return; // guard against overly short/generic names causing false matches
+      const nicknameForms=(SONG_NICKNAMES[name]||[]).map(n=>n.toLowerCase());
+      let count=0;
+      reviews.forEach(r=>{
+        const text=((r.reviewtitle||"")+" "+(r.reviewbody||"")).toLowerCase();
+        if(text.includes(nameLower)||nicknameForms.some(n=>text.includes(n)))count++;
+      });
+      if(count>0)songCounts[name]=count;
+    });
+  }
+  const topSongs=Object.entries(songCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([name,count])=>({name,count}));
+
+  return{totalReviews:reviews.length,avgRating,audioIssueCount,topSongs};
+}
+function renderReviewSummaryBox(analysis,targetEl){
+  if(!analysis)return;
+  const box=document.createElement("div");box.className="review-summary-box";
+  let html=`<div class="review-summary-label">— At A Glance (${analysis.totalReviews} review${analysis.totalReviews===1?"":"s"}) —</div>`;
+  if(analysis.avgRating)html+=`<div class="review-summary-line">★ Average rating: ${analysis.avgRating.toFixed(1)}/5</div>`;
+  if(analysis.audioIssueCount>0)html+=`<div class="review-summary-line review-summary-flag">⚠ ${analysis.audioIssueCount} of ${analysis.totalReviews} reviews mention audio quality concerns</div>`;
+  if(analysis.topSongs.length){
+    const songsList=analysis.topSongs.map(s=>`${s.name} (${s.count})`).join(", ");
+    html+=`<div class="review-summary-line">♪ Most mentioned: ${songsList}</div>`;
+  }
+  box.innerHTML=html;
+  targetEl.insertBefore(box,targetEl.firstChild);
+}
+// Uses only the primary recording's reviews when that alone clears the
+// threshold; only fetches alternate recordings' reviews (in parallel) when
+// genuinely needed to reach a meaningful sample size, since that's extra
+// network cost this feature shouldn't impose on every single show page.
+async function buildAndRenderReviewSummary(primaryReviews,doc,altList,targetEl){
+  const gdshow=getGDShow(isoDate(doc.date));
+  let allReviews=[...(primaryReviews||[])];
+
+  if(allReviews.length<MIN_REVIEWS_FOR_SUMMARY&&altList&&altList.length){
+    const fetches=altList.map(alt=>
+      fetch(`https://archive.org/metadata/${alt.identifier}`).then(r=>r.json()).catch(()=>null)
+    );
+    const results=await Promise.allSettled(fetches);
+    results.forEach(res=>{
+      if(res.status==="fulfilled"&&res.value&&res.value.reviews){
+        allReviews=allReviews.concat(res.value.reviews);
+      }
+    });
+    // If aggregation actually found more reviews than the primary recording
+    // alone had, re-render the visible list with the full set too -- so the
+    // summary above it never describes reviews the person can't see below.
+    if(allReviews.length>(primaryReviews||[]).length){
+      renderReviewsInto(allReviews,targetEl);
+    }
+  }
+
+  const analysis=analyzeReviews(allReviews,gdshow);
+  if(analysis)renderReviewSummaryBox(analysis,targetEl);
 }
 
 function renderRecordingSwitcherInto(currentDoc,alts,targetEl){
@@ -5622,7 +5750,24 @@ function playTrack(idx){
   if(idx<0||idx>=tracks.length)return;
   currentIdx=idx;
   document.querySelectorAll(".track-name").forEach((el,i)=>el.classList.toggle("playing",i===idx));
-  audio.src=tracks[idx].url;
+
+  const standby=getStandbyAudio();
+  const isGaplessAdvance=standby.src===tracks[idx].url&&standby.readyState>=2;
+
+  if(isGaplessAdvance){
+    // Next track was already preloaded in the background -- just swap
+    // which element is "active". No fetch, no decode wait: it's already
+    // buffered, so play() starts right away instead of the 1-2s gap that
+    // came from only ever setting .src after the previous track ended.
+    activeAudio.pause();
+    activeAudio=standby;
+  }else{
+    // Manual jump to an arbitrary track (not a sequential advance) --
+    // nothing was preloaded for this specific target, so load it directly
+    // on the current active element the same way playback always worked.
+    activeAudio.src=tracks[idx].url;
+  }
+
   // Deliberately not calling audio.load() here: setting .src already
   // triggers the browser's resource-selection algorithm, and an explicit
   // .load() on top of that is implicated in a known iOS Safari quirk where
@@ -5643,6 +5788,18 @@ function playTrack(idx){
     });
   };
   attemptPlay(false);
+
+  // Silently preload the next track into whatever is now the standby
+  // element, so its swap can be instant when its turn comes.
+  const nextIdx=idx+1;
+  if(nextIdx<tracks.length){
+    const nowStandby=getStandbyAudio();
+    if(nowStandby.src!==tracks[nextIdx].url){
+      nowStandby.src=tracks[nextIdx].url;
+      nowStandby.load();
+    }
+  }
+
   playerTrack.textContent=tracks[idx].name;
   playerShow.textContent=(activeShow?.venue||activeShow?.title||"")+" · "+(activeShow?.date||"");
   nowPlayingShow={identifier:activeIdentifier,venue:activeShow?.venue,date:activeShow?.date,coverage:activeShow?.coverage};
@@ -5677,8 +5834,10 @@ function playTrack(idx){
   }
 }
 if("mediaSession" in navigator){
-  audio.addEventListener("play",()=>{navigator.mediaSession.playbackState="playing";});
-  audio.addEventListener("pause",()=>{navigator.mediaSession.playbackState="paused";});
+  [audioA,audioB].forEach(el=>{
+    el.addEventListener("play",()=>{if(el===activeAudio)navigator.mediaSession.playbackState="playing";});
+    el.addEventListener("pause",()=>{if(el===activeAudio)navigator.mediaSession.playbackState="paused";});
+  });
 }
 
 function togglePlay(){
@@ -5723,17 +5882,26 @@ document.addEventListener("keydown",e=>{
 });
 
 // ── AUDIO EVENTS ──
-audio.addEventListener("timeupdate",()=>{
-  if(audio.duration){
-    const pct=audio.currentTime/audio.duration*100;
-    progressFill.style.width=pct+"%";
-    timeElapsed.textContent=fmtTime(audio.currentTime);
-    timeDuration.textContent=fmtTime(audio.duration);
-    progressTrack.setAttribute("aria-valuenow",Math.round(pct));
-  }
+[audioA,audioB].forEach(el=>{
+  el.addEventListener("timeupdate",()=>{
+    if(el!==activeAudio)return;
+    if(el.duration){
+      const pct=el.currentTime/el.duration*100;
+      progressFill.style.width=pct+"%";
+      timeElapsed.textContent=fmtTime(el.currentTime);
+      timeDuration.textContent=fmtTime(el.duration);
+      progressTrack.setAttribute("aria-valuenow",Math.round(pct));
+    }
+  });
+  el.addEventListener("ended",()=>{
+    if(el!==activeAudio)return;
+    if(currentIdx<tracks.length-1)playTrack(currentIdx+1);else{vizPlaying=false;playBtn.textContent="▶";}
+  });
+  el.addEventListener("error",()=>{
+    if(el!==activeAudio)return;
+    if(currentIdx<tracks.length-1)setTimeout(()=>playTrack(currentIdx+1),500);
+  });
 });
-audio.addEventListener("ended",()=>{if(currentIdx<tracks.length-1)playTrack(currentIdx+1);else{vizPlaying=false;playBtn.textContent="▶";}});
-audio.addEventListener("error",()=>{if(currentIdx<tracks.length-1)setTimeout(()=>playTrack(currentIdx+1),500);});
 progressTrack.addEventListener("click",e=>{if(!audio.duration)return;const rect=progressTrack.getBoundingClientRect();audio.currentTime=((e.clientX-rect.left)/rect.width)*audio.duration;});
 progressTrack.addEventListener("keydown",e=>{
   if(!audio.duration)return;
