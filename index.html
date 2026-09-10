@@ -5461,7 +5461,15 @@ function buildRecordingSwitcher(currentDoc,alts){
           tracks=mp3s.map(f=>({name:displayName(f),url:"https://archive.org/download/"+alt.identifier+"/"+encodeURIComponent(f.name),duration:f.length||""}));
           slot.innerHTML="";
           renderSetlistInto(activeShow,slot);
-          if(reviewsSlot)renderReviewsInto(meta.reviews||[],reviewsSlot);
+          if(reviewsSlot){
+            renderReviewsInto(meta.reviews||[],reviewsSlot);
+            // The switcher's own alternates list is relative to whichever
+            // recording was active *before* this switch -- rebuild it
+            // relative to the newly-active one (previous current + the
+            // other untouched alts) so aggregation still works correctly.
+            const newAltList=[currentDoc,...alts.filter(a=>a.identifier!==alt.identifier)];
+            buildAndRenderReviewSummary(meta.reviews||[],activeShow,newAltList,reviewsSlot);
+          }
         }catch{
           slot.innerHTML='<div class="error-msg">Could not load recording.</div>';
           if(reviewsSlot)reviewsSlot.innerHTML="";
